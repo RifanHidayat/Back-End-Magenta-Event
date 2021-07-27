@@ -17,12 +17,18 @@
   },
   "homepage": "https://github.com/RifanHidayat/magenta-event_back-end#readme",
   "dependencies": {
+    "aws-sdk": "^2.954.0",
     "body-parser": "^1.19.0",
     "cora": "^0.1.0",
     "cors": "^2.8.5",
+    "dateformat": "^4.5.1",
+    "dotenv": "^10.0.0",
     "express": "^4.17.1",
     "link": "^0.1.5",
-    "mysql": "^2.18.1"
+    "multer": "^1.4.2",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.2.5",
+    "sequelize": "^6.6.5"
   },
   "devDependencies": {
     "nodemon": "^2.0.9"

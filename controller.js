@@ -2,6 +2,9 @@
 
 var response=require('./response');
 var connection=require('./connection');
+var connection_hrd=require('./connection_hrd');
+const conn = require('./connection');
+var dateFormat = require('dateformat');
 
 exports.index=function(req,res,){
 response.ok("aplikasi berjalan",res);
@@ -11,7 +14,7 @@ response.ok("aplikasi berjalan",res);
 exports.getAllDataQuotations=function(req,res){
     connection.query("SELECT * FROM quotations WHERE status='Final'",function(error,rows,fields){
         if (error){
-            connection.log(error);
+            console.log(error);
         }else{
             response.ok(rows,res)
         }
@@ -19,12 +22,146 @@ exports.getAllDataQuotations=function(req,res){
 };
 
 //show data project
-exports.getAllDataProjects=function(req,res){
-    connection.query("SELECT * FROM projects",function(error,rows,fields){
+exports.getAllDataProjects= async function(req,res){
+    let  data_projects=[]
+    connection.query("SELECT * FROM projects ORDER BY id DESC",function(error,rows,fields){
         if (error){
-            connection.log(error);
+            console.log(error);
+        }else{
+            //response.ok(rows,res)
+            rows.map((value,index)=>{
+                connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=?",[value.id],function(error,budget_project,fields){
+                    if (error){
+
+                    }else{
+                        connection.query("SELECT *  FROM tasks where project_id=?",[value.id],function(error,tasks,fields){
+                            if (error){
+                                console.log(error)
+
+                            }else{
+                                var budget={
+                                    balance:budget_project.length<=0?null:budget_project[0].total_in+budget_project[0].total_out,
+                                }
+                               
+                                var data={
+                                    id:value.id,
+                                    project_number:value.project_number,
+                                    quotation_number:value.quotation_number,
+                                    project_created_date:value.project_created_date,
+                                    project_start_date:value.project_start_date,
+                                    project_end_date:value.project_end_date,
+                                    event_customer:value.event_customer,
+                                    event_pic:value.event_pic,
+                                    description:value.description,
+                                    longtitude:value.longtitude,
+                                    latitude:value.latitude,
+                                    grand_total:value.grand_total,
+                                    status:value.status,
+                                    members:JSON.parse(value.members),
+                                    budget:budget,              
+                                    task:tasks,
+                                                                                            
+                                  }
+                                  data_projects.push(data)
+                                  if (index+1>=rows.length){
+                                      response.ok(data_projects,res)
+
+                                  }
+                            }
+                        })
+                    
+                       
+                          
+
+                    }
+                })
+            
+
+            });
+        
+        }
+       // response.ok(data_projects,res)
+    }
+ 
+    );
+};
+
+//show data project
+exports.getAllDataProjectsByEmployees= async function(req,res){
+    let  data_projects=[]
+    var employee_id=req.params.employee_id;
+    var status=req.params.status;
+    connection.query("SELECT * FROM projects WHERE status=? AND members_id in (?) ORDER BY id DESC",[status,employee_id],function(error,rows,fields){
+        if (error){
+            console.log(error);
+        }else{
+            //response.ok(rows,res)
+            rows.map((value,index)=>{
+                connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=?",[value.id],function(error,budget_project,fields){
+                    if (error){
+
+                    }else{
+                        connection.query("SELECT *  FROM tasks where project_id=?",[value.id],function(error,tasks,fields){
+                            if (error){
+                                console.log(error)
+
+                            }else{
+                                var budget={
+                                    balance:budget_project.length<=0?null:budget_project[0].total_in+budget_project[0].total_out,
+                                }
+                               
+                                var data={
+                                    id:value.id,
+                                    project_number:value.project_number,
+                                    quotation_number:value.quotation_number,
+                                    project_created_date:value.project_created_date,
+                                    project_start_date:value.project_start_date,
+                                    project_end_date:value.project_end_date,
+                                    event_customer:value.event_customer,
+                                    event_pic:value.event_pic,
+                                    description:value.description,
+                                    longtitude:value.longtitude,
+                                    latitude:value.latitude,
+                                    grand_total:value.grand_total,
+                                    status:value.status,
+                                    members_id:value.members_id,
+                                    members:JSON.parse(value.members),
+                                    budget:budget,              
+                                    task:tasks,
+                                                                                            
+                                  }
+                                  data_projects.push(data)
+                                  if (index+1>=rows.length){
+                                      response.ok(data_projects,res)
+
+                                  }
+                            }
+                        })
+                    
+                       
+                          
+
+                    }
+                })
+            
+
+            });
+        
+        }
+       // response.ok(data_projects,res)
+    }
+ 
+    );
+};
+
+exports.getAllDataProjectsStatus=function(req,res){
+    var status=req.params.status
+    connection.query("SELECT * FROM projects where status=? ORDER BY id DESC ",[status],function(error,rows,fields){
+        if (error){
+            console.log(error);
         }else{
             response.ok(rows,res)
+
         }
     });
 };
@@ -44,17 +181,31 @@ exports.createDataProjects=function(req,res){
     var id_quotation=req.body.id_quotation;
     var quotation_number=req.body.quotation_number;
     var status=req.body.status;
+    var quotations=req.body.quotations;
 
-
-
+  
+ 
     connection.query("INSERT INTO projects(project_number,project_created_date,project_start_date,project_end_date,event_customer,  event_pic,description,latitude,longtitude,grand_total,id_quotation,quotation_number,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    [project_number,
-        project_created_date,project_start_date,project_end_date,event_customer,event_pic,description,latitude,longitude,grand_total,id_quotation,quotation_number,status],
+    [
+        project_number,
+        project_created_date,
+        project_start_date,
+        project_end_date,
+        event_customer,event_pic,
+        description,
+        latitude,
+        longitude,
+        grand_total,
+        id_quotation,
+        quotation_number,
+        status
+    ],
         function(error,rows,fields){
         if (error){
             console.log(error)
         }else{
-            response.ok("Data have been save",res)
+            response.ok("Data has been save",res)
+         
         }
     }
     );
@@ -68,7 +219,28 @@ exports.deleteProject=function(req,res){
         if (error){
             console.log(error);
         }else{
-            response.ok("Data berhasil dihapus",res)
+            
+            connection.query("DELETE FROM budget_project WHERE project_id=?",[id],(error,rows,fields)=>{
+                if (error){
+                    console.log(error);
+                }else{
+                
+                    connection.query("DELETE FROM budget_transactions_project WHERE project_id=?",[id],(error,rows,fields)=>{
+                        if (error){
+                            console.log(error);
+                        }else{
+                  
+                            connection.query("DELETE FROM tasks WHERE project_id=?",[id],(error,rows,fields)=>{
+                                if (error){
+                                    console.log(error);
+                                }else{
+                                    response.ok("Data has been deleted",res)
+                                }
+                            });
+                        }
+                    });
+                }
+            });
         }
     });
 
@@ -76,6 +248,8 @@ exports.deleteProject=function(req,res){
 
 exports.getDetailProject=function(req,res){
     var id=req.params.id;
+    var data
+    var data_tranasctions=[]
     connection.query("SELECT * FROM projects where id=?",[id],(error,rows,fields)=>{
         if (error){
             console.log(error);
@@ -86,25 +260,129 @@ exports.getDetailProject=function(req,res){
                     console.log(error);
 
                 }else{
-                    var data={
-                        id:rows[0]['id'],
-                        id_quotation:rows[0]['id_quotation'],  
-                        project_number:rows[0]['project_number'],
-                        quotation_number:rows[0]['quotation_number'],  
-                        project_created_date:rows[0]['project_created_date'],
-                        project_start_date:rows[0]['project_start_date'],
-                        project_end_date:rows[0]['project_end_date'],
-                        event_customer:rows[0]["event_customer"],
-                        event_pic:rows[0]['event_pic'],
-                        latitude:rows[0]['latitude'],
-                        longtitude:rows[0]['longtitude'],
-                        description:rows[0]['description'],
-                        total_project_cost:rows[0]['grand_total'], 
-                        members:rows[0]['members'],        
-                        quotations:quotations                
-                    }
+                    connection.query('SELECT * FROM budget_project JOIN budget_transaction_project ON budget_project.project_id=budget_transaction_project.project_id where budget_project.project_id=?',[id],function(error,budgets,fields){
+                        if (error){
+                            console.log(error)
 
-                    response.ok(data,res);
+                        }else{
+                           connection.query('SELECT * FROM budget_transaction_project where project_id=?',[id],function(error,transaction_project,fields){
+                               if (error){
+
+                               }else{
+                                connection.query('SELECT * FROM tasks where project_id=?',[id],function(error,tasks,fields){
+                                    if (error){
+                                        console.log(error)   
+                                    }else{
+                                        if (budgets.length>0){
+                                            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=?",[id],function(error,total){
+                                                if (error){
+
+                                                }else{
+                                                    transaction_project.map((values,index)=>{
+                                                        connection_hrd.query("SELECT * FROM bank_accounts where id=?",[values.account_id],function(error,accounts,fields){
+                                                            if (error){
+                                                                console.log(error)
+                                           
+                                                            }else{
+            
+                                                               data={
+                                                                   id:values.id,
+                                                                   date:values.date,
+                                                                   amount:values.amount,
+                                                                   description:values.description,
+                                                                   type:values.type,
+                                                                   account_id:values.account_id,
+                                                                   project_id:values.project_id,
+                                                                   account:accounts[0]                      
+                                                               }
+                                                               data_tranasctions.push(data)
+                                                               if (index+1>=budgets.length){
+                                                               
+                                                        
+                                                        
+                                                                    var budget={
+                                                                        budget_start_date:budgets[0]['budget_start_date'],
+                                                                        budget_end_date:budgets[0]['budget_end_date'],
+                                                                        opening_balance:budgets[0]['opening_balance'],
+                                                                        total_in:total[0].total_in,
+                                                                        total_out:total[0].total_out,
+                                                                        balance:total[0].total_in+total[0].total_out,
+
+                                                                        transactions:data_tranasctions
+                                                                    }
+                                                                    //query get budget
+                                                                    var data={
+                                                                        id:rows[0]['id'],
+                                                                        id_quotation:rows[0]['id_quotation'],  
+                                                                        project_number:rows[0]['project_number'],
+                                                                        quotation_number:rows[0]['quotation_number'],  
+                                                                        project_created_date:rows[0]['project_created_date'],
+                                                                        project_start_date:rows[0]['project_start_date'],
+                                                                        project_end_date:rows[0]['project_end_date'],
+                                                                        event_customer:rows[0]["event_customer"],
+                                                                        event_pic:rows[0]['event_pic'],
+                                                                        latitude:rows[0]['latitude'],
+                                                                        longtitude:rows[0]['longtitude'],
+                                                                        description:rows[0]['description'],
+                                                                        total_project_cost:rows[0]['grand_total'], 
+                                                                        members:JSON.parse(rows[0]['members']), 
+                                                                        status:rows[0]['status'],
+                                                                        budget:budget,
+                                                                        tasks:tasks,       
+                                                                        quotations:quotations                
+                                                                    }
+                                                                    response.ok(data,res);  
+                                                                }
+                                                                   
+                                                                                            
+                                                            }
+                                                        })
+                                                             
+                                                    })
+
+                                                }
+                                            })
+
+                                      
+                   
+
+                                        }else{
+                                           // if (budgets.length>=0){
+                                             
+                                                //query get budget
+                                                var data={
+                                                    id:rows[0]['id'],
+                                                    id_quotation:rows[0]['id_quotation'],  
+                                                    project_number:rows[0]['project_number'],
+                                                    quotation_number:rows[0]['quotation_number'],  
+                                                    project_created_date:rows[0]['project_created_date'],
+                                                    project_start_date:rows[0]['project_start_date'],
+                                                    project_end_date:rows[0]['project_end_date'],
+                                                    event_customer:rows[0]["event_customer"],
+                                                    event_pic:rows[0]['event_pic'],
+                                                    latitude:rows[0]['latitude'],
+                                                    longtitude:rows[0]['longtitude'],
+                                                    description:rows[0]['description'],
+                                                    total_project_cost:rows[0]['grand_total'], 
+                                                    members:JSON.parse(rows[0]['members']), 
+                                                    status:rows[0]['status'],
+                                                    budget:budgets,
+                                                    tasks:tasks,       
+                                                    quotations:quotations                
+                                                }
+                                                response.ok(data,res);
+
+                                        //}
+                                   
+                                    }
+                                    }
+                                })
+                               }
+                           })
+                          
+                        }
+                    })
+          
 
                 }
             })
@@ -119,7 +397,7 @@ exports.getPojectNumber=function(req,res){
   
     connection.query("SELECT count(*) as count  FROM projects",function(error,count,fields){
         if (error){
-            connection.log(error)
+            console.log(error)
 
         }else{
             var d= new Date();
@@ -153,8 +431,6 @@ exports.editDataProjects=function(req,res){
     var quotation_number=req.body.quotation_number;
     var id=req.params.id;
 
-    
-
     connection.query("UPDATE  projects SET project_number=?,project_created_date=?,project_start_date=?,project_end_date=?,event_customer=?,event_pic=?,description=?,latitude=?,longtitude=?,grand_total=?,id_quotation=?,quotation_number=? where id=?",
     [project_number,
         project_created_date,project_start_date,project_end_date,event_customer,event_pic,description,latitude,longitude,grand_total,id_quotation,quotation_number,id],
@@ -162,9 +438,1709 @@ exports.editDataProjects=function(req,res){
         if (error){
             console.log(error)
         }else{
-            response.ok("Data have been updated",res)
+            response.ok("Data has been updated",res)
         }
     }
     );
 
+}
+//save members porject
+exports.saveMembers=function(req,res){
+    var members=req.body.members;
+    var members_id=req.body.members_id
+    var id=req.params.id
+ 
+
+    connection.query("UPDATE projects SET members=?,members_id=? where id=?",[members,members_id,id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            response.ok("Data has been save",res)
+           
+
+        }
+    });
+
+}
+exports.createTransactionHangerBudget=function(req,res){
+    var data=req.body.data
+    var project_id=req.body.project_id
+    
+    var values= data
+    var sql='INSERT INTO budget_transaction_project (amount,date,type,description,image,account_id,project_id) VALUES ? ';
+    //delete database
+    connection.query('DELETE FROM budget_transaction_project where project_id=?',[project_id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+            
+        }else{
+            connection.query(sql,[values],function(error,rows,fields){
+                if (error){
+                    console.error(error)
+                }else{
+                    response.ok("data has been save",res);
+                }
+            })
+
+        }  
+    })
+    // connection.end()
+}
+
+exports.createTaskProject=function(req,res){
+    var data=req.body.data
+    var id=req.body.id;
+    values=data;
+
+    connection.query('DELETE FROM tasks where project_id=?',[id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            connection.query('INSERT INTO tasks(name,status,project_id) VALUES  ?',[values],function(error,rows,fields){
+                if (error){
+                    console.log(error)
+        
+                }else{
+                    response.ok("Data has been save",res)
+                }
+        
+            })
+        }
+
+    })
+    
+   
+
+}
+
+exports.getTaskProject=function(req,res){
+  var project_id=req.params.id;
+  connection.query("SELECT * FROM tasks where project_id=?",[project_id],function(error,rows,fields){
+      if (error){
+        console.log(error);
+      }else{
+          response.ok(rows,res);
+      }
+  })
+}
+
+exports.editTaskProject=function(req,res){
+    var task_id=req.params.id;
+    var status="completed";
+    connection.query("UPDATE tasks SET status=? where id=?",[status,task_id],function(error,rows,fields){
+        if (error){
+          console.log(error);
+        }else{
+            response.ok(rows,res);
+        }
+    })
+  }
+  
+
+exports.getDetailTransactionsProject=function(req,res){
+    project_id=req.params.id;
+    console.log(project_id)
+    var transactions_project=[];
+    var balance=0;
+    connection.query('SELECT * FROM budget_transaction_project WHERE project_id=?',[project_id],function(error,transactions,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=?",[project_id],function(error,total,fields){
+                if (error){
+                    console.log(error)
+
+                }else{
+                    transactions.map((value,index)=>{
+                        if (value.type=='out'){
+                           balance=Number(balance)-Number(value.amount)
+
+                        }else{
+                            balance=Number(balance)+Number(value.amount)
+                        }
+                        var data={id:value.id,date:value.date,amount:value.amount,description:value.description,image:value.image,type:value.type,balance:balance,account_id:value.account_id,porject_id:value.project_id}
+                        transactions_project.push(data)
+                        
+                    })
+                    if (total!=''){
+                        let data={
+                            
+                            total_in: total[0]['total_in'],
+                            total_out:total[0]['total_out'],
+                            balance:total[0]['total_in']+total[0]['total_out'],
+                      
+                            transactions:transactions_project,                    
+                        }
+                        response.ok(data,res)
+
+                    }else{
+                        let data={
+                           
+                            status:'pending',
+                            total_in: total[0]['total_in'],
+                            total_out:total[0]['total_out'],
+                            balance:total[0]['total_in']+total[0]['total_out'],
+                            transactions:rows,                    
+                        }
+                        response.ok(data,res)
+
+                    }                       
+                }
+            }) 
+            
+            }
+
+         
+    })
+}
+
+exports.getCountStatusProject=function(req,res){
+    connection.query("SELECT COUNT(*) AS total_pending from projects WHERE status='pending'",function(error,pending,fields){
+        if (error){
+            console.log(error)
+        }else{
+            connection.query("SELECT COUNT(*) AS total_approved from projects WHERE status='approved'",function(error,approved,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    connection.query("SELECT COUNT(*) AS total_rejected from projects WHERE status='rejected'",function(error,rejected,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                            connection.query("SELECT COUNT(*) AS total_closed from projects WHERE status='closed'",function(error,closed,fields){
+                                if (error){
+                                    console.log(error)
+                                }else{
+                                    var data={
+                                        total_pending:pending[0].total_pending,
+                                        total_rejected:rejected[0].total_rejected,
+                                        total_approved:approved[0].total_approved,
+                                        total_closed:closed[0].total_closed
+                                       
+                                    }
+                                    response.ok(data,res)
+                                    
+                                }
+                            })
+                            
+                        }
+                    })
+                    
+                }
+            })
+            
+        }
+    })
+}
+
+
+exports.createTransactionProject=function(req,res){
+    var date=req.body.date;
+    var description=req.body.description;
+    var amount=req.body.amount;
+    var type=req.body.type;
+    var id=req.body.id;
+
+    connection.query("INSERT INTO transactions_project(date,description,amount,type,project_id) VALUES (?,?,?,?,?)",[date,description,amount,type,id],function(error,rows,fields){
+        if (error){
+        console.log(error)
+
+        }else{
+            response.ok("Data has been save",res)
+
+        }
+    })
+}
+
+exports.getAllTransactionsProject=function(req,res){
+    var id=req.params.id
+    var transactions=[];
+    var margin=0;
+    var balance=0;
+    var persentase;
+    connection.query("SELECT * FROM transactions_project where project_id=?",[id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            
+
+            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM transactions_project where project_id=?",[id],function(error,total,fields){
+                if (error){
+                    console.log(error)
+
+ 
+                }else{
+                       // response.ok(rows,res)
+            for (var i=0;i<rows.length;i++){
+                if (rows[i].type=='in'){
+                    balance=balance+rows[i].amount;
+                   
+                   
+                    persentase=(Number(balance)/Number(total[0].total_in) * 100 ).toFixed(2)
+                }else{
+                    balance=balance-rows[i].amount;
+                                  
+                    persentase=(Number(balance)/Number(total[0].total_in) * 100 ).toFixed(2)
+                }
+             
+                
+                var tempTransaction={
+                    
+                    date:rows[i].date,
+                    description:rows[i].description,
+                    amount:rows[i].amount,
+                    type:rows[i].type,
+                    balance:balance,
+                    persentase:persentase
+                }
+                    transactions.push(tempTransaction)
+            }
+
+            var data={
+                total_in:total[0].total_in,
+                total_out:total[0].total_out,
+                balance:total[0].total_in-total[0].total_out,
+                transactions:transactions,
+               
+            }
+            response.ok(data,res)
+
+
+                }
+            })
+        
+
+        }
+    })
+}
+
+
+
+
+exports.approvalProject=function(req,res){
+  let id=req.params.id
+  let status="approved"
+  let accounts=[];
+  console.log(req.body.profits)
+
+  var description=req.body.description
+  connection.query('UPDATE projects set status=? where id=?',[status,id],function(error,rows,fields){
+      if (error){
+          console.log(error)
+
+      }else{
+          //response.ok('Data has been save',res)
+          connection.query('SELECT * FROM budget_transaction_project where project_id=?',[id],function(error,transaction_project,fields){
+              if (error){
+                  console.log(error)
+
+              }else{
+                 
+                  transaction_project.map((value)=>{
+                  //rquest {amount:budget,date:date,type:type,description:description,image:image,account_Id:account:id}
+                  var account=[value.amount,dateFormat(value.date,'yyyy-mm-dd'),"out",description,"",value.account_id];
+                  accounts.push(account)
+
+                  })
+     
+                  
+                  //create transaction accounts
+                  var sql='INSERT INTO transaction_account (amount,date,type,description,image,account_id) VALUES ?';
+                  var values=accounts;
+                 
+                  connection_hrd.query(sql,[values],function(erro,tranasaction_accounts,fields){
+                      if (error){
+                          console.log(error); 
+                      }else{
+                          var values=req.body.profits;
+                     
+                          connection.query("INSERT INTO transactions_project(date,description,amount,type,project_id) VALUES ?",[values],function(error,rows,fields){
+                            if (error){
+                            console.log(error)
+                    
+                            }else{
+                                response.ok("Data has been save",res)
+                    
+                            }
+                        })      
+                      }
+              
+               })
+              }
+          })
+      }
+  })
+}
+
+
+exports.rejectionProject=function(req,res){
+    let id=req.params.id
+    let status="rejected"
+    connection.query('UPDATE projects set status=? where id=?',[status,id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+  
+        }else{
+            response.ok('Data has been save',res)
+        }
+    })
+  }
+  
+
+
+
+
+//insert data account
+exports.createAccount=function(req,res){
+    var bank_account_name=req.body.bank_account_name;
+    var bank_account_number=req.body.bank_account_number;
+    var bank_account_balance=req.body.bank_account_balance
+    var type=req.body.type;
+    var now=new Date()
+    var date = now.getDate();
+    var month = now.getMonth() + 1;
+    var year = now.getFullYear();
+
+
+    now=year+'-'+'00'.substr( String(month).length ) + month+'-'+'00'.substr( String(date).length ) + date
+   
+    //insert to account table
+    connection_hrd.query("INSERT INTO bank_accounts(bank_name,account_number,account_balance,type) VALUES(?,?,?,?)",
+    [bank_account_name,bank_account_number,bank_account_balance,type],
+        function(error,rows,fields){
+        if (error){
+        console.log(error)            
+        }else{
+            var id=rows['insertId'];
+            connection_hrd.query('INSERT INTO transaction_account(date,amount,type,account_id) values (?,?,?,?)',[now,bank_account_balance,'in',id],function(error,rows,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    response.ok('Data has been save',res)
+                }
+            });
+        }
+    }
+    );
+
+}
+
+//edit data account
+exports.editAccount=function(req,res){
+    var bank_account_name=req.body.bank_account_name;
+    var bank_account_number=req.body.bank_account_number;
+    var bank_account_balance=req.body.bank_account_balance;
+    var type=req.body.type;
+    var id=req.params.id;
+   
+    connection_hrd.query("UPDATE bank_accounts SET bank_name=?,account_number=?,account_balance=?,type=?  WHERE id=?",
+    [bank_account_name,bank_account_number,bank_account_balance,type,id],
+        function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            // response.ok("Data has been updated",res)
+            response.ok("Data has been updated",res)
+
+            // connection_hrd.query("UPDATE transaction_account SET amount=? WHERE account_id=?",
+            // [bank_account_balance,type,id],
+            //     function(error,rows,fields){
+            //     if (error){
+            //         console.log(error)
+            //     }else{
+            //          response.ok("Data has been updated",res)
+            //     }
+            // });
+        }
+    });
+}
+
+//delete project by id
+exports.deleteAccount=function(req,res){
+    var id=req.params.id;
+    connection_hrd.query("DELETE FROM bank_accounts WHERE id=?",[id],(error,rows,fields)=>{
+        if (error){
+            console.log(error);
+        }else{
+           // response.ok("Data has been deleted",res)
+           connection_hrd.query("DELETE FROM transaction_account WHERE account_id=?",[id],(error,rows,fields)=>{
+            if (error){
+                console.log(error);
+            }else{
+                response.ok("Data has been deleted",res)
+            }
+        })
+        }
+    });
+
+}
+
+//show data account
+exports.getAllAccount=function(req,res){
+    var data_transactions=[]
+    var data;
+    connection_hrd.query("SELECT * FROM bank_accounts",function(error,rows,fields){
+        if (error){
+            console.log(erro);
+        }else{
+         //response.ok(rows,res)
+         rows.map((values,index)=>{
+             connection_hrd.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM transaction_account where account_id=?",[values.id],function(error,total,fields){
+                 if (error){
+                     console.log(error)
+
+                 }else{
+                    data={
+                        id:values.id,
+                        bank_name:values.bank_name,
+                        account_number:values.account_number,
+                        opening_balance:values.account_balance,
+                        type:values.type,
+                        balance:total[0].total_in-total[0].total_out
+
+                    }
+                    data_transactions.push(data)
+                    if (index+1>=rows.length){
+                        response.ok(data_transactions,res)
+                    }
+                   
+               
+
+                 }
+             })
+                  
+         })
+        
+         
+           
+        }
+    });
+};
+
+
+//show detail account
+exports.getDetailAccount=function(req,res){
+    var account_id=req.params.id;
+    var balance=0;
+    var transactions_account=[];
+    connection_hrd.query("SELECT * FROM bank_accounts WHERE id=?",[account_id],function(error,rows,fields){
+        if (error){
+            console.log(error);
+        }else{
+        
+            connection_hrd.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM transaction_account where account_id=?",[account_id],function(error,total,fields){
+                if (error){
+                    console.log(error)       
+
+                }else{
+                    connection_hrd.query("SELECT * FROM transaction_account where account_id=?",[account_id],function(error,transactions,fields){
+                        if (error){
+                            console.log(error)                            
+        
+                        }else{
+
+                        //calculation balance trnsaction
+                         transactions.map((value,index)=>{
+                             if (value.type=='out'){
+                                balance=Number(balance)-Number(value.amount)
+
+                             }else{
+                                 balance=Number(balance)+Number(value.amount)
+                             }
+                             var data={id:value.id,date:value.date,amount:value.amount,description:value.description,image:value.image,type:value.type,balance:balance}
+                             transactions_account.push(data)
+                             
+                         })
+
+                            if (res['data']!=''){
+                                var data={
+                                    id:rows[0]['id'],
+                                    bank_name:rows[0]['bank_name'],  
+                                    account_number:rows[0]['account_number'],
+                                    account_balance:rows[0]['account_balance'],  
+                                    type:rows[0]['type'],
+                                    account_owner:rows[0]['account_owner'],
+                                    bank_code:rows[0]['bank_code'],  
+                                    total_in:total[0]['total_in'],
+                                    total_out:total[0]['total_out'],
+                                    balance:total[0]['total_in']-total[0]['total_out'],
+                                    transactions:transactions_account                    
+                                }
+                                response.ok(data,res)
+                            
+                            }else{
+                                response.ok(rows,res);
+                            
+                            }
+        
+                        }
+                    })                 
+                }
+            })
+           
+        }
+    });
+};
+
+
+exports.createTransactionAccount=function(req,res){
+    var data=req.body.data
+    var sql='INSERT INTO transaction_account (amount,date,type,description,image,account_id) VALUES ?';
+    var values=data;
+    connection_hrd.query(sql,[values],function(error,rows,fields){
+        if (error){
+            console.log(error);
+
+        }else{
+            response.ok("data has been save",res);
+
+        }
+
+    })
+}
+
+
+
+
+exports.createBudget=function(req,res){  
+    var budget_start_date=req.body.budget_start_date;
+    var budget_end_date=req.body.budget_end_date;
+    var opening_balance=req.body.opening_balance;
+    var project_id=req.body.project_id;
+   
+    connection.query("DELETE FROM budget_project where project_id=?",[project_id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            connection.query('INSERT INTO budget_project(budget_start_date,budget_end_date,opening_balance,project_id) VALUES (?,?,?,?)',[budget_start_date,budget_end_date,opening_balance,project_id],function(error,rows,fields){
+                if (error){
+                    console.log(error)
+        
+                }else{
+                    response.ok("data has been save",res);
+                }
+            })
+        }
+    })
+}
+
+
+    exports.getDetailBudgets=function(req,res){
+        project_id=req.params.id;
+        console.log(project_id)
+        var data_transactions=[]
+        
+        connection.query('select * from budget_transaction_project where project_id=? AND type="in"',[project_id],function(error,rows,fields){
+            if (error){
+                console.log(error)
+
+            }else{
+
+                //project number
+                  connection.query("SELECT * FROM projects JOIN budget_project ON projects.id=budget_project.project_id where projects.id=? ",[project_id],function(error,projects,fields){
+                    if (error){
+                        console.log(error)
+
+                    }else{
+
+                        if (projects!=''){
+                           
+
+
+                                 rows.map((values,index)=>{
+                                    connection_hrd.query("SELECT * FROM bank_accounts where id=?",[values.account_id],function(error,accounts,fields){
+                                        if (error){
+    
+                                        }else{
+                                           
+                                          
+                                            var d={
+                                                date:values.date,
+                                                description:values.description,
+                                                amount:values.amount,
+                                                type:'in',
+                                                account_id:values.account_id,
+                                                project_id:values.project_id,
+                                                image:values.image,
+                                                account:accounts[0]
+            
+                                            }
+                                            data_transactions.push(d)
+    
+                                            if (index+1>=rows.length){
+                                             
+                                                let data={
+                                                    project_number:projects[0]['project_number'],                       
+                                                    total_budget:projects[0]['opening_balance'],
+                                                    budget_start_date:projects[0]['budget_start_date'],
+                                                    budget_end_date:projects[0]['budget_end_date'],
+                                                                                              
+                                                    status:projects[0]['status'],
+                                                    transactions:data_transactions,                    
+                                                }
+                                                response.ok(data,res)
+                                              
+                                            }
+    
+                                        }
+                                    })
+                                  
+    
+                                })
+
+                        }else{
+                            let data={
+                                project_number:null,
+                                status:'pending',
+                                transactions:rows,                    
+                             }
+                             response.ok(data,res)
+                           
+
+                           
+
+                        }   
+                              
+                    }
+                })
+                }
+
+             
+        })
+
+    }
+
+    exports.getBudgetsProject=function(req,res){
+        project_id=req.params.id;
+        console.log(project_id)
+        var data_transactions=[]
+        
+        connection.query('select * from budget_transaction_project where project_id=?',[project_id],function(error,rows,fields){
+            if (error){
+                console.log(error)
+
+            }else{
+
+                //project number
+                  connection.query("SELECT * FROM projects JOIN budget_project ON projects.id=budget_project.project_id where projects.id=? ",[project_id],function(error,projects,fields){
+                    if (error){
+                        console.log(error)
+
+                    }else{
+
+                        if (projects!=''){
+                            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM budget_transaction_project where project_id=?",[project_id],function(error,total,fields){
+                                if (error){
+                                    console.log(error)
+
+                                }else{
+                                    rows.map((values,index)=>{
+                                        var d={
+                                            date:values.date,
+                                            description:values.description,
+                                            amount:values.amount,
+                                            type:values.type,
+                                            account_id:values.account_id,
+                                            project_id:values.project_id,
+                                            image:values.image, 
+                                                 
+                                        }
+                                        data_transactions.push(d)
+    
+                                        if (index+1>=rows.length){           
+                                            let data={
+                                                project_number:projects[0]['project_number'],                       
+                                                
+                                                budget_start_date:projects[0]['budget_start_date'],
+                                                budget_end_date:projects[0]['budget_end_date'],
+                                                status:projects[0]['status'],
+                                                total_in:total[0].total_in,
+                                                total_out:total[0].total_out,
+                                                balance:total[0].total_in-total[0].total_out,
+                                                transactions:data_transactions,                    
+                                            }
+                                            response.ok(data,res)
+                                          
+                                        }
+        
+                                    })
+                                    
+                                }
+                            })
+                           
+
+
+                          
+
+                        }else{
+                            let data={
+                                project_number:null,
+                                status:'pending',
+                                transactions:rows,                    
+                             }
+                             response.ok(data,res)
+                           
+
+                           
+
+                        }   
+                              
+                    }
+                })
+                }
+
+             
+        })
+
+    }
+
+    exports.getBudgetsProjectType=function(req,res){
+        var project_id=req.params.id;
+        var status=req.params.type;
+        console.log(project_id)
+        var data_transactions=[]
+        
+        connection.query('select * from budget_transaction_project where project_id=? AND type=?',[project_id,status],function(error,rows,fields){
+            if (error){
+                console.log(error)
+
+            }else{
+
+                //project number
+                  connection.query("SELECT * FROM projects JOIN budget_project ON projects.id=budget_project.project_id where projects.id=? ",[project_id],function(error,projects,fields){
+                    if (error){
+                        console.log(error)
+
+                    }else{
+
+                        if (projects!=''){
+                            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM budget_transaction_project where project_id=?",[project_id],function(error,total,fields){
+                                if (error){
+                                    console.log(error)
+
+                                }else{
+                                    rows.map((values,index)=>{
+                                        var d={
+                                            date:values.date,
+                                            description:values.description,
+                                            amount:values.amount,
+                                            type:values.type,
+                                            account_id:values.account_id,
+                                            project_id:values.project_id,
+                                            image:values.image, 
+                                            status:values.status
+                                              
+                                        }
+                                        data_transactions.push(d)
+    
+                                        if (index+1>=rows.length){           
+                                            let data={
+                                                project_number:projects[0]['project_number'],                       
+                                                
+                                                budget_start_date:projects[0]['budget_start_date'],
+                                                budget_end_date:projects[0]['budget_end_date'],
+                                                status:projects[0]['status'],
+                                                total_in:total[0].total_in,
+                                                total_out:total[0].total_out,
+                                                balance:total[0].total_in-total[0].total_out,
+                                                transactions:data_transactions,                    
+                                            }
+                                            response.ok(data,res)
+                                          
+                                        }
+        
+                                    })
+                                    
+                                }
+                            })
+                           
+
+
+                          
+
+                        }else{
+                            let data={
+                                project_number:null,
+                                status:'pending',
+                                transactions:rows,                    
+                             }
+                             response.ok(data,res)
+                           
+
+                           
+
+                        }   
+                              
+                    }
+                })
+                }
+
+             
+        })
+
+    }
+
+
+
+
+exports.getAllPIC=function(req,res){
+    connection.query("SELECT * FROM pic_event",function(error,rows,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            response.ok(rows,res)
+
+        }
+    })
+}
+
+
+exports.CreatePIC=function(req,res){
+    var opening_balance=req.body.opening_balance;
+    var balance=req.body.balance;
+    var pic_id=req.body.pic_id;
+
+    var description=req.body.description;
+    var date=req.body.date
+    var amount=req.body.amount;
+    var id_faktur=req.body.id_faktur;
+    var type=req.body.type;
+    var connection_table="pic_tb"
+
+    connection.query("INSERT INTO pic_tb(opening_balance,balance,pic_id) value(?,?,?)",[opening_balance,balance,pic_id],function(error,rows,fields){
+    if (error){
+        console.log(error)
+
+    }else{
+        //response.ok("Data has been save",res)
+        let id=rows['insertId'];
+       
+
+        connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,type,id,id,connection_table],function(error,transactions,fields){
+            if (error){
+                console.log(error)
+            }else{
+                response.ok("Data has been save",res)
+                
+            }
+
+        })
+    }
+    })
+}
+exports.EditPIC=function(req,res){
+    var opening_balance=req.body.opening_balance;
+    var balance=req.body.balance;
+    var pic_id=req.body.pic_id;
+    var id=req.params.id;
+    var connection_table="pic_tb";
+connection.query("UPDATE pic_tb SET opening_balance=?,balance=?,pic_id=? where id=?",[opening_balance,balance,pic_id,id],function(error,rows,fields){
+    if (error){
+        console.log(error)
+
+    }else{
+      
+        connection.query("UPDATE transaction_tb SET amount=? where connection_id=? AND connection_table=?",[opening_balance,id,connection_table],function(error,rows,fields){
+            if (error){
+                console.log(error)
+
+            }else{
+                response.ok("Data has been updated",res)
+
+            }
+        })
+
+    }
+})
+}
+
+
+
+exports.getAllPICTB=function(req,res){
+    var data_transactions=[]
+    var data
+   
+connection.query("SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance FROM pic_tb JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event",function(error,rows,fields){
+    if (error){
+        console.log(error)
+
+    }else{
+        //response.ok(rows,res)
+        rows.map((values,index)=>{
+            connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM transaction_tb where id_pictb=?",[values.id],function(error,total,fields){
+                if (error){
+                    console.log(error)
+
+                }else{
+                   data={
+                       id:values.id,
+                       name:values.name,
+                       position:values.position,
+                       email:values.email,
+                       opening_balance:values.opening_balance,
+                       balance:total[0].total_in-total[0].total_out
+
+                   }
+                   data_transactions.push(data)
+                   if (index+1>=rows.length){
+                       response.ok(data_transactions,res)
+                   }
+                  
+              
+
+                }
+            })
+                 
+        })
+       
+    }
+})
+}
+
+exports.deletePICTB=function(req,res){
+    let id=req.params.id;
+    connection.query("DELETE FROM pic_tb where id=?",[id],function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            //response.ok("data has been deleted",res)
+
+            connection.query("DELETE FROM transaction_tb where id_pictb=?",[id],function(error,rows,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    response.ok("data has been deleted",res)
+                }
+            })
+        }
+    })
+    }
+
+    exports.getDetailPICTB=function(req,res){
+        var id=req.params.id;
+        var transactions_pictb=[]
+        var balance=0;
+   
+        connection.query("SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance,pic_event.id_event FROM pic_tb JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event where id=?",[id],function(error,rows,fields){
+            if (error){
+                console.log(error)
+        
+            }else{
+                connection.query("SELECT * FROM transaction_tb WHERE id_pictb=?",[id],function(error,transactions,fields){
+                    if (error){
+                        console.log(error)
+                    }else{
+                        connection.query("SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from transaction_tb where id_pictb=?",[id],function(error,total,fields){
+                            if (error){
+                                console.log(error)
+
+                            }else{
+                                 //calculation balance trnsaction
+                         transactions.map((value,index)=>{
+                            if (value.type=='out'){
+                               balance=Number(balance)-Number(value.amount)
+
+                            }else{
+                                balance=Number(balance)+Number(value.amount)
+                            }
+                            var data={id:value.id,date:value.date,amount:value.amount,description:value.description,type:value.type,balance:balance}
+                            transactions_pictb.push(data)
+                            
+                            })
+                                var data={
+                                    id:rows[0].id,       
+                                    total_in:total[0].total_in==null?0:total[0].total_in,
+                                    total_out:total[0].total_out==null?0:total[0].total_out,
+                                    balance:total[0].total_in-total[0].total_out,
+                                    opening_balance:rows[0].opening_balance,
+                                                             
+                                    name:rows[0].name,
+                                    position:rows[0].position,
+                                    email:rows[0].email,
+                                    event_id:rows[0].id_event,
+                                    transactions:transactions_pictb
+                                }
+                                response.ok(data,res)
+                            }
+
+                        })
+                    }
+                })
+
+             
+            }
+        })
+        }
+
+    exports.getALlFaktur=function(req,res){
+        connection.query("SELECT *,projects.grand_total as total_project_cost,projects.id as project_id FROM faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number  JOIN projects  ON projects.id_quotation in (quotations.id)",function(error,rows,fields){
+            if (error){
+                console.log(error)
+            }else{
+                response.ok(rows,res)
+            }
+        })
+    }
+
+    exports.createTransactionTB=function(req,res){
+        var description=req.body.description;
+        var date=req.body.date
+        var amount=req.body.amount;
+        var id_faktur=req.body.id_faktur;
+        var type=req.body.type;
+        var id_pictb=req.body.id_pictb;
+        connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,id_faktur) value(?,?,?,?,?,?)",[date,description,amount,type,id_pictb,id_faktur],function(error,rows,fields){
+            if (error){
+                console.log(error)
+            }else{
+                response.ok("Data has been save",res)
+            }
+
+        })
+    }
+
+
+
+//in transaction
+exports.createInTransation=function(req,res){
+    var description=req.body.description;
+    var amount =req.body.amount;
+    var date=req.body.date;
+    var faktur_id=req.body.faktur_id
+    var id_pictb=req.body.id_pictb;
+    var project_id=req.body.project_id;
+    var connection_table="in_transactions"
+
+    connection.query("INSERT INTO in_transactions (in_date,amount,faktur_id) values (?,?,?)",[date,amount,faktur_id],function(error,in_transactions,fields){
+        if (error){
+            console.log(error)
+        }else{
+            let connection_id=in_transactions['insertId'];
+       
+
+        connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'out',id_pictb,connection_id,connection_table],function(error,transactions,fields){
+            if (error){
+                console.log(error)
+            }else{
+            //    response.ok("Data has been save",res)
+            connection.query("INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'in',project_id,connection_id,connection_table],function(error,transactions,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                response.ok("Data has been save",res)
+                    
+                }
+    
+            })
+                
+            }
+
+        })
+
+        }
+    });
+}
+
+exports.createInTransation=function(req,res){
+    var description=req.body.description;
+    var amount =req.body.amount;
+    var date=req.body.date;
+    var faktur_id=req.body.faktur_id
+    var id_pictb=req.body.id_pictb;
+    var project_id=req.body.project_id;
+    var connection_table="in_transactions"
+
+    connection.query("INSERT INTO in_transactions (in_date,amount,faktur_id) values (?,?,?)",[date,amount,faktur_id],function(error,in_transactions,fields){
+        if (error){
+            console.log(error)
+        }else{
+            let connection_id=in_transactions['insertId'];
+       
+
+        connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'out',id_pictb,connection_id,connection_table],function(error,transactions,fields){
+            if (error){
+                console.log(error)
+            }else{
+            //    response.ok("Data has been save",res)
+            connection.query("INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'in',project_id,connection_id,connection_table],function(error,transactions,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                response.ok("Data has been save",res)
+                    
+                }
+    
+            })
+                
+            }
+
+        })
+
+        }
+    });
+}
+
+exports.editInTransation=function(req,res){
+
+    var amount =req.body.amount;
+    var date=req.body.date;
+    
+    var id=req.params.id
+    var connection_table="in_transactions"
+    
+
+    connection.query("UPDATE in_transactions SET in_date=?,amount=? where id=?",[date,amount,id],function(error,in_transactions,fields){
+        if (error){
+            console.log(error)
+        }else{       
+        connection.query("UPDATE transaction_tb SET date=?,amount=? WHERE connection_id=? AND connection_table=?",[date,amount,id,connection_table],function(error,transactions,fields){
+            if (error){
+                console.log(error)
+            }else{
+            //    response.ok("Data has been save",res)
+            connection.query("UPDATE transactions_project SET date=?,amount=? WHERE connection_id=? AND connection_table=?",[date,amount,id,connection_table],function(error,transactions,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                response.ok("Data has been updated",res)
+                    
+                }
+    
+            })
+                
+            }
+
+        })
+
+        }
+    });
+}
+
+exports.deleteInTransaction=function(req,res){
+    id=req.params.id;
+    connection_table="in_transactions"
+    connection.query("DELETE FROM in_transactions where id=?",[id],function(error,fields){
+        if (error){
+            console.log(error)  
+        }else{
+            connection.query("DELETE FROM transactions_project where connection_id=? AND connection_table=?",[id,connection_table],function(error,fields){
+                if (error){
+                    console.log(error)
+
+                }else{
+                    connection.query("DELETE FROM transaction_tb WHERE connection_id=? AND connection_table=?",[id,connection_table],function(error,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                            response.ok("Data has been save",res)
+                        }
+                    })
+
+                }
+            })
+        }
+    })
+  
+}
+
+exports.getAllInTransaction=function(req,res){
+    // SELECT *,projects.grand_total as total_project_cost,projects.id as project_id FROM in_transactions JOIN faktur ON in_transactions.faktur_id=faktur.id_faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number  JOIN projects  ON projects.id_quotation in (quotations.id
+    connection.query("SELECT in_transactions.id as id,in_transactions.in_date as date,in_transactions.amount,in_transactions.faktur_id as faktur_id,quotations.pic_event,quotations.po_number,projects.project_number,projects.description,faktur.total_faktur,faktur.faktur_number,projects.id as porject_id,quotations.id_pic_event FROM in_transactions JOIN faktur ON in_transactions.faktur_id=faktur.id_faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number  JOIN projects  ON projects.id_quotation in (quotations.id)",function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            response.ok(rows,res)
+        }
+    })
+}
+
+
+
+
+    //out transaction
+    exports.createOutTransaction=function(req,res){
+        var label=req.body.label;
+        var project_id=req.body.project_id;
+        var pictb_id=req.body.pictb_id;
+        var pictb_id_owner=req.body.pictb_id_owner;
+        var date=req.body.date;
+        var description=req.body.description;
+        var amount=req.body.amount;
+        var connection_table="out_transactions"
+        connection.query("INSERT INTO out_transactions(date,description,amount,label,project_id,pictb_id) VALUES(?,?,?,?,?,?)",[date,description,amount,label,project_id,pictb_id],function(error,out_transactions,fields){
+            if (error){
+                console.log(error)
+
+            
+            }else{
+                let connection_id=out_transactions['insertId'];
+                if (project_id!=0){
+                    connection.query("INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'out',project_id,connection_id,connection_table],function(error,transactions,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                            connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'in',pictb_id_owner,connection_id,connection_table],function(error,transactions,fields){
+                                if (error){
+                                    console.log(error)
+                                }else{
+                               
+                                    response.ok("Data has been save",res)
+                                    
+                                }
+                    
+                            })
+                        //response.ok("Data has been save",res)
+                            
+                        }
+            
+                    })
+                  
+
+
+                }else{
+                    connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'out',pictb_id_owner,connection_id,connection_table],function(error,transactions,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                       
+                          
+
+                           connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'in',pictb_id,connection_id,connection_table],function(error,transactions,fields){
+                            if (error){
+                                console.log(error)
+                            }else{
+                           
+                                response.ok("Data has been save",res)
+                                
+                            }
+                
+                        })
+                            
+                        }
+                    })
+                }
+            }
+
+        })
+    }
+
+
+    exports.editOutTransaction=function(req,res){
+        var label=req.body.label;
+        var project_id=req.body.project_id;
+        var pictb_id=req.body.pictb_id;
+        var pictb_id_owner=req.body.pictb_id_owner;
+        var date=req.body.date;
+        var description=req.body.description;
+        var amount=req.body.amount;
+        var connection_table="out_transactions"
+        var id=req.params.id;
+        
+        connection.query("UPDATE out_transactions SET date=?,description=?,amount=? where id=?",[date,description,amount,id],function(error,out_transactions,fields){
+            if (error){
+                console.log(error)
+
+            
+            }else{
+               
+                if (project_id!=0){
+                   
+                    connection.query(" UPDATE transactions_project SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=?",[date,description,amount,id,connection_table],function(error,transactions,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                           
+                           
+                            connection.query("UPDATE transaction_tb SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=?",[date,description,amount,id,connection_table],function(error,transactions,fields){
+                                if (error){
+                                    console.log(error)
+                                }else{
+                               
+                                    response.ok("Data has been save",res)
+                                    
+                                }
+                    
+                            })
+                        //response.ok("Data has been save",res)
+                            
+                        }
+            
+                    })
+                  
+
+
+                }else{
+                    
+
+                    connection.query("UPDATE transaction_tb SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=? AND type=?",[date,description,amount,id,connection_table,'out'],function(error,transactions,fields){
+                        if (error){
+                            console.log(error)
+                        }else{
+                           connection.query("UPDATE transaction_tb SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=? AND type=?",[date,description,amount,id,connection_table,'in'],function(error,transactions,fields){
+                            if (error){
+                                console.log(error)
+                            }else{
+                           
+                                response.ok("Data has been save",res)
+                                
+                            }
+                
+                        })
+                            
+                        }
+                    })
+                }
+            }
+
+        })
+    }
+
+
+exports.getAllOutTransaction=function(req,res){
+  
+    var data 
+    connection.query("SELECT * FROM out_transactions",function(error,out_transactions,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+          
+            response.ok(out_transactions,res)
+
+        }
+    })
+}
+
+
+    exports.deleteOutTransactions=function(req,res){
+        let id=req.params.id
+        let project_id=req.params.project_id
+        let pictb_id=req.params.pictb_id
+        var connection_table="out_transactions"
+        connection.query("DELETE FROM out_transactions where id=?",[id],function(error,rows,fields){
+            if (error){
+                console.log(error)
+
+            }else{
+               
+                if (project_id!==0){
+                    connection.query("DELETE FROM transactions_project where connection_id=? AND connection_table=?",[id,connection_table],function(error,rows){
+                        if (error){
+                            
+
+                        }else{
+                            connection.query("DELETE FROM transaction_tb WHERE connection_id=? AND connection_table=?",[id,connection_table],function(error,rows){
+                                if (error){
+
+                                }else{
+                                    response.ok("Data has been save",res)
+                                }
+                            })
+                            //response.ok("Data has been save",res)
+
+
+                        }
+                    })
+
+                }else{
+                    connection.query("DELETE FROM transaction_tb where connection_id=? AND connection_table=?",[id,connection_table],function(error,rows){
+                        if (error){
+                            console.log(error)
+
+                        }else{
+                            response.ok("Data has been save",res)
+
+                        }
+                    })
+
+                }
+               
+
+            }
+        })
+       
+}
+
+//cost
+
+exports.createTransactionOutProject=function(req,res){
+    var description=req.body.description;
+    var amount=req.body.amount;
+    var date=req.body.date;
+    var project_id=req.body.project_id;
+    var connection_table="out_transaction_project"
+    connection.query("INSERT INTO out_transaction_project(date,description,amount,project_id) values(?,?,?,?)",[date,description,amount,project_id],function(error,out_transaction_project,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            let connection_id=out_transaction_project['insertId'];
+            connection.query("INSERT transactions_project(date,description,amount,type,project_id,connection_id,connection_table) values(?,?,?,?,?,?,?)",[date,description,amount,"out",project_id,connection_id,connection_table],function(error,transactions_project,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    response.ok("Data has been save",res)
+
+                }
+            })
+        }
+    })
+
+}
+
+exports.editTransactionOutProject=function(req,res){
+    var description=req.body.description;
+    var amount=req.body.amount;
+    var date=req.body.date;
+    var project_id=req.body.project_id;
+    var connection_table="out_transaction_project"
+    var id=req.params.id
+   
+    connection.query("UPDATE out_transaction_project SET date=?,description=?,amount=? WHERE id=?",[date,description,amount,id],function(error,out_transaction_project,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+          
+            connection.query("UPDATE transactions_project SET date=?,description=?,amount=? where connection_id=? AND connection_table=?",[date,description,amount,id,connection_table],function(error,transactions_project,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    response.ok("Data has been updated",res)
+
+                }
+            })
+        }
+    })
+
+}
+
+exports.getAllCostProject=function(req,res){
+    var project_id=req.params.project_id;
+    connection.query("SELECT * FROM out_transaction_project where project_id=?",[project_id],function(error,rows){
+        if (error){
+            console.log(error)
+
+        }else{
+            response.ok(rows,res)
+
+        }
+    })
+}
+
+exports.deleteCostProject=function(req,res){
+    var id=req.params.id;
+    var connection_table="out_transaction_project"
+    connection.query("DELETE FROM out_transaction_project where id=?",[id],function(error,rows){
+        if (error){
+            console.log(error)
+        }else{
+            connection.query("DELETE FROM transactions_project where connection_id=? AND connection_table=?",[id,connection_table],function(error,rows,fields){
+                if (error){
+                    console.log(error)
+
+                }else{
+                    response.ok("Data has been save",res)
+                }
+            })
+        }
+    })
+}
+
+
+//in out transactions
+exports.getInOutTransactions=function(req,res){
+  
+    connection.query("SELECT count(*) as count  FROM in_out_transactions",function(error,count,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            var d= new Date();
+            var month = d.getMonth()+1;
+            var month='00'.substr( String(month).length ) + month; 
+            var year=d.getFullYear()
+            var date=d.getDate();
+            var date='00'.substr( String(date).length ) + date; 
+            var count=count[0]['count']+1
+            var counter='000'.substr( String(count).length ) +count; 
+            var project_number="IN-"+date+month+year+'-'+counter;
+            response.ok(project_number,res);
+        }
+
+
+    });
+}
+
+exports.getAccount=function(req,res){
+    connection_hrd.query("SELECT * FROM  bank_accounts WHERE type='eo' OR type='open'",function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            response.ok(rows,res)
+        }
+    })
+}
+
+// in out transaction
+exports.createInOutTransaction=function(req,res){
+    var inout_number=req.body.inout_number;
+    var date=req.body.date
+    var description=req.body.description;
+    var amount=req.body.amount;
+    var in_account=req.body.in_account;
+    var out_account=req.body.out_account;
+
+    connection.query("INSERT INTO in_out_transactions(inout_number,date,description,amount,in_account,out_account) Values(?,?,?,?,?,?)",[inout_number,date,description,amount,in_account,out_account],function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            connection_hrd.query("INSERT INTO transaction_account(date,description,type,amount,account_id,transaction_id)VALUES(?,?,?,?,?,?)",[date,description,"in",amount,in_account,inout_number],function(error,out_transaction,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    connection_hrd.query("INSERT INTO transaction_account(date,description,type,amount,account_id,transaction_id) VALUES (?,?,?,?,?,?)",[date,description,"out",amount,out_account,inout_number],function(error,in_transaction,fields){
+                        if (error){
+                            console.log(error)
+        
+                        }else{
+                            response.ok("Data has been save",res)
+                            
+                        }
+                    })
+
+                }
+            })
+
+
+        }
+    })
+}
+
+exports.editInOutTransaction=function(req,res){
+    var inout_number=req.body.inout_number;
+    var date=req.body.date
+    var description=req.body.description;
+    var amount=req.body.amount;
+    var in_account=req.body.in_account;
+    var out_account=req.body.out_account;
+    
+
+   
+
+    connection.query("UPDATE in_out_transactions SET date=?,description=?,amount=?,in_account=?,out_account=? WHERE inout_number=?",[date,description,amount,in_account,out_account,inout_number],function(error,rows,fields){
+        if (error){
+            console.log(error)
+        }else{
+            connection_hrd.query("UPDATE transaction_account SET date=?,description=?,amount=?,account_id=? WHERE transaction_id=? AND type=?",[date,description,amount,in_account,inout_number,'in'],function(error,out_transaction,fields){
+                if (error){
+                    console.log(error)
+                }else{
+                    connection_hrd.query("UPDATE transaction_account SET date=?,description=?,amount=?,account_id=? WHERE transaction_id=? AND type=?",[date,description,amount,out_account,inout_number,'out'],function(error,in_transaction,fields){
+                        if (error){
+                            console.log(error)
+        
+                        }else{
+                            response.ok("Data has been save",res)
+                            
+                        }
+                    })
+
+                }
+            })
+
+
+        }
+    })
+}
+
+
+exports.getAllInOutTransaction=function(req,res){
+    var data_transactions=[];
+    var account_name_in;
+    var account_name_out;
+
+    connection.query("SELECT * FROM in_out_transactions ",function(error,in_out_transactions,fields){
+        if (error){
+            console.log(error)
+
+        }else{
+            in_out_transactions.map((values,index)=>{
+              
+
+                connection_hrd.query("SELECT * FROM bank_accounts where id=?",[values.in_account],function(error,bank_name_in){
+                    if (error){
+                        console.log(error)
+                    }else{
+                        connection_hrd.query("SELECT * FROM bank_accounts where id=?",[values.out_account],function(error,bank_name_out){
+                            if (error){
+                                console.log(error)
+                            }else{
+                                var data={
+                                    id:values.id,
+                                    inout_number:values.inout_number,
+                                    description:values.description,
+                                    date:values.date,
+                                    amount:values.amount,
+                                    account_in_id:bank_name_in[0].id,
+                                    account_out_id:bank_name_out[0].id,
+                                    account_in_name:bank_name_in[0].bank_name,
+                                    account_out_name:bank_name_out[0].bank_name,
+                                    account_in_number:bank_name_in[0].account_number,
+                                    account_out_number:bank_name_out[0].account_number
+                                }
+                                data_transactions.push(data)
+                
+                                if (in_out_transactions.length<=index+1){
+                                    response.ok(data_transactions,res)
+                                }
+                              
+        
+                            }
+        
+                        })
+
+                    }
+
+                })
+                
+              
+              
+            })
+
+
+        }
+    })
+}
+
+exports.deleteInOutTransaction=function(req,res){
+    var id=req.params.id;
+    connection.query("DELETE FROM in_out_transactions where inout_number=?",[id],function(error){
+        if (error){
+
+        }else{
+            connection_hrd.query("DELETE FROM transaction_account where transaction_id=?",[id],function(error){
+                if (error){
+                    console.log(error)
+        
+                }else{
+                    connection_hrd.query("DELETE FROM transaction_account where transaction_id=?",[id],function(error){
+                        if (error){
+                            console.log(error)
+                
+                        }else{
+                            response.ok("Data has been saved",res)
+                            
+                        }
+                    })
+                    
+                }
+            })
+
+        }
+    })
 }
