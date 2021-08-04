@@ -9,7 +9,9 @@ var transactions_project=db.define('budget_transaction_project',{
     image:Sequelize.STRING,
     type:Sequelize.STRING,
     account_id:Sequelize.STRING,
-    project_id:Sequelize.STRING   
+    project_id:Sequelize.STRING,
+    status:Sequelize.STRING  
+
 },
 {
     freezeTableName:true,

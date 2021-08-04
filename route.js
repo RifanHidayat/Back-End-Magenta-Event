@@ -129,14 +129,14 @@ module.exports=function(app){
       .post(json.createTransactionTB);
 
       app.route('/api/faktur')
-      .get(json.getALlFaktur);
+      .get(json.getAllFaktur);
 
       // in transactions
       app.route('/api/transactions/in')
       .post(json.createInTransation);
-      app.route('/api/transactions/in')
+      app.route('/api/pictb/:id/transactions/in')
       .get(json.getAllInTransaction)
-      app.route('/api/transactions/in/:id')
+      app.route('/api/transactions/in/:id/:faktur_id/:payment')
       .delete(json.deleteInTransaction)
       app.route('/api/transactions/in/:id')
       .patch(json.editInTransation)
@@ -145,7 +145,7 @@ module.exports=function(app){
      //out transactions
      app.route('/api/transactions/out')
      .post(json.createOutTransaction);
-     app.route('/api/transactions/out')
+     app.route('/api/pictb/:id/transactions/out')
      .get(json.getAllOutTransaction)
      app.route('/api/transactions/out/:id/:project_id/:pictb_id')
      .delete(json.deleteOutTransactions)
@@ -174,9 +174,30 @@ module.exports=function(app){
 
 
      //mobile
-
      app.route('/api/mobile/project/transactions')
      .post(controller.transaction_project.create)
+     app.route('/api/mobile/project/transactions/:id/:project_number')
+     .delete(controller.transaction_project.delete)
+     app.route('/api/mobile/project/transactions/:id')
+     .patch(controller.transaction_project.update)
+     app.route('/api/project/transactions/approval/:id')
+     .patch(controller.transaction_project.approval)
+
+
+     app.route('/api/faktur/:id/payment')
+     .get(json.getAllFakturPayment)
+
+     app.route('/api/faktur/payment')
+     .post(json.creteTransactionFaktur)
+
+     app.route('/api/faktur/payment-number')
+     .get(json.getPaymentNumber)
+
+     app.route('/api/faktur/transactions')
+     .get(json.getTransactionsfaktur)
+
+     app.route('/api/faktur/transactions/:id')
+     .get(json.getTransactionsfakturDetail)
 
 
 

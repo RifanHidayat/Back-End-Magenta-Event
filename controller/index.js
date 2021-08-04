@@ -7,12 +7,15 @@ const budget_project=require('./website/budgets')
 //mobile
 const transaction_project=require('./mobile/BudgetTransactionController')
 
+const faktur=require('./website/faktur')
+
 
 const controller ={}
 controller.bank_accounts=bank_accounts
 controller.projects=projects
 controller.budget_project=budget_project
 controller.transaction_project=transaction_project
+controller.faktur=faktur;
 
 
 module.exports=controller
