@@ -51,6 +51,36 @@ exports.getAllDataQuotations = function (req, res) {
   );
 };
 
+exports.checkQuotations = function (req, res) {
+  const ids = req.query.ids;
+  connection.query(
+    "SELECT * FROM projects JOIN projects_quotations ON projects.id=projects_quotations.project_id JOIN quotations ON quotations.id=projects_quotations.quotation_id  WHERE quotations.id IN (?) AND projects.status=?",
+    [ids, "pending"],
+    function (error, rows) {
+      if (error) {
+        console.log(error);
+      } else {
+        response.ok(rows, res);
+      }
+    }
+  );
+};
+
+exports.checkQuotationsAll = function (req, res) {
+  const ids = req.query.ids;
+  connection.query(
+    "SELECT * FROM projects JOIN projects_quotations ON projects.id=projects_quotations.project_id JOIN quotations ON quotations.id=projects_quotations.quotation_id  WHERE quotations.id IN ? AND projects.status=? ",
+    [492, "pending"],
+    function (error, rows) {
+      if (error) {
+        console.log(error);
+      } else {
+        response.ok(rows, res);
+      }
+    }
+  );
+};
+
 //show data project
 exports.getAllDataProjects = async function (req, res) {
   let data_projects = [];
@@ -159,7 +189,7 @@ exports.getAllDataProjectsByEmployees = async function (req, res) {
   let end = page * limit;
 
   connection.query(
-    "SELECT * ,member_project.status as status_member,projects.status as status,projects.id as id  FROM projects JOIN member_project ON member_project.project_id=projects.id WHERE projects.status=? AND employee_id IN (?) ORDER BY projects.id DESC LiMIT ? OFFSET ?",
+    "SELECT * ,member_project.status as status_member,projects.status as status,projects.id as id,projects.id_quotation as id_quotation  FROM projects JOIN member_project ON member_project.project_id=projects.id WHERE projects.status=? AND employee_id IN (?) ORDER BY projects.id DESC LiMIT ? OFFSET ?",
     [status, employee_id, limit, start],
     function (error, rows, fields) {
       if (error) {
@@ -189,43 +219,55 @@ exports.getAllDataProjectsByEmployees = async function (req, res) {
                             if (error) {
                               console.log(error);
                             } else {
-                              var budget = {
-                                total_in: budget_project[0].total_in,
-                                balance:
-                                  budget_project.length <= 0
-                                    ? null
-                                    : budget_project[0].total_in -
-                                      budget_project[0].total_out,
-                                total_out: budget_project[0].total_out,
-                              };
+                              connection.query(
+                                `SELECT * from quotations WHERE id IN (${value.id_quotation})`,
+                                function (error, quotations) {
+                                  if (error) {
+                                    consolog.log(error);
+                                  } else {
+                                    var budget = {
+                                      total_in: budget_project[0].total_in,
+                                      balance:
+                                        budget_project.length <= 0
+                                          ? null
+                                          : budget_project[0].total_in -
+                                            budget_project[0].total_out,
+                                      total_out: budget_project[0].total_out,
+                                    };
 
-                              var data = {
-                                id: value.id,
-                                project_number: value.project_number,
-                                quotation_number: value.quotation_number,
-                                project_created_date:
-                                  value.project_created_date,
-                                project_start_date: value.project_start_date,
-                                project_end_date: value.project_end_date,
-                                event_customer: value.event_customer,
-                                event_pic: value.event_pic,
-                                description: value.description,
-                                longtitude: value.longtitude,
-                                latitude: value.latitude,
-                                grand_total: value.grand_total,
-                                status: value.status,
-                                total_task_completed:
-                                  total_task[0].total_task_completed,
-                                total_all_task: tasks.length,
-                                members: JSON.parse(value.members),
-                                budget: budget,
-                                task: tasks,
-                                status: value.status,
-                              };
-                              data_projects.push(data);
-                              if (index + 1 >= rows.length) {
-                                response.ok(data_projects, res);
-                              }
+                                    var data = {
+                                      id: value.id,
+                                      project_number: value.project_number,
+                                      quotation_number: value.quotation_number,
+                                      project_created_date:
+                                        value.project_created_date,
+                                      project_start_date:
+                                        value.project_start_date,
+                                      project_end_date: value.project_end_date,
+                                      event_customer: value.event_customer,
+                                      event_pic: value.event_pic,
+                                      description: value.description,
+                                      longtitude: value.longtitude,
+                                      latitude: value.latitude,
+                                      grand_total: value.grand_total,
+                                      status: value.status,
+                                      status_member: value.status_member,
+
+                                      total_task_completed:
+                                        total_task[0].total_task_completed,
+                                      total_all_task: tasks.length,
+                                      members: JSON.parse(value.members),
+                                      budget: budget,
+                                      task: tasks,
+                                      quotations: quotations,
+                                    };
+                                    data_projects.push(data);
+                                    if (index + 1 >= rows.length) {
+                                      response.ok(data_projects, res);
+                                    }
+                                  }
+                                }
+                              );
                             }
                           }
                         );
@@ -276,7 +318,11 @@ exports.createDataProjects = function (req, res) {
   var quotation_number = req.body.quotation_number;
   var status = req.body.status;
   var quotations = req.body.quotations;
-  console.log(id_quotation);
+
+  // id_quotation.filter((value) => {
+  //   connection.query("SELECT * FROM projects WHERE id_quotation  IN ()");
+  // });
+  //connection.query("SELECT * FROM projects where id_quotation")
 
   connection.query(
     "INSERT INTO projects(project_number,project_created_date,project_start_date,project_end_date,event_customer,  event_pic,description,latitude,longtitude,grand_total,id_quotation,quotation_number,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -299,7 +345,25 @@ exports.createDataProjects = function (req, res) {
       if (error) {
         console.log(error);
       } else {
-        response.ok("Data has been saved", res);
+        var id = rows["insertId"];
+        id_quotation.map((value, index) => {
+          connection.query(
+            "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
+            [value, id],
+            function (error, projects) {
+              if (error) {
+                console.log(error);
+              } else {
+                console.log(index);
+                console.log(projects.length);
+                if (index + 1 >= id_quotation.length) {
+                  response.ok("Data has been saved", res);
+                }
+              }
+            }
+          );
+        });
+        //response.ok("Data has been saved", res);
         // var id=rows['insertId'];
         // id_quotation.map((value,index)=>{
         //     connection.query("UPDATE quotations SET project_id=? WHERE id=?",[id,value],function(error,rows){
@@ -353,7 +417,28 @@ exports.deleteProject = function (req, res) {
                         if (error) {
                           console.log(error);
                         } else {
-                          response.ok("Data has been deleted", res);
+                          //response.ok("Data has been deleted", res);
+                          connection.query(
+                            "DELETE FROM transactions_project where project_id=?",
+                            [id],
+                            function (error, rows) {
+                              if (error) {
+                                console.log(error);
+                              } else {
+                                connection.query(
+                                  "DELETE FROM projects_quotations where project_id=?",
+                                  [id],
+                                  function (error, rows) {
+                                    if (error) {
+                                      console.log(error);
+                                    } else {
+                                      response.ok("Data has been deleted", res);
+                                    }
+                                  }
+                                );
+                              }
+                            }
+                          );
                         }
                       }
                     );
@@ -786,7 +871,7 @@ exports.getDetailProjectMobile = function (req, res) {
 //get project number
 exports.getPojectNumber = function (req, res) {
   connection.query(
-    "SELECT count(*) as count  FROM projects",
+    "SELECT MAX(SUBSTRING(project_number,-3)) as count from projects WHERE  Date(created_at)=CURDATE()",
     function (error, count, fields) {
       if (error) {
         console.log(error);
@@ -797,7 +882,8 @@ exports.getPojectNumber = function (req, res) {
         var year = d.getFullYear();
         var date = d.getDate();
         var date = "00".substr(String(date).length) + date;
-        var count = count[0]["count"] + 1;
+        var count =
+          count[0]["count"] == null ? 1 : parseInt(count[0]["count"]) + 1;
         var counter = "000".substr(String(count).length) + count;
         var project_number = "PN-" + date + month + year + "-" + counter;
         response.ok(project_number, res);
@@ -821,7 +907,7 @@ exports.editDataProjects = function (req, res) {
   var quotation_number = req.body.quotation_number;
   var id = req.params.id;
   //console.log(id_quotation);
-
+  console.log(id_quotation);
   connection.query(
     "UPDATE  projects SET project_number=?,project_created_date=?,project_start_date=?,project_end_date=?,event_customer=?,event_pic=?,description=?,latitude=?,longtitude=?,grand_total=?,id_quotation=?,quotation_number=? where id=?",
     [
@@ -843,7 +929,36 @@ exports.editDataProjects = function (req, res) {
       if (error) {
         console.log(error);
       } else {
-        response.ok("Data has been updated", res);
+        //response.ok("Data has been updated", res);
+
+        connection.query(
+          "DELETE FROM projects_quotations WHERE project_id=?",
+          [id],
+
+          function (error, projects) {
+            if (error) {
+              console.log(error);
+            } else {
+              id_quotation.map((value, index) => {
+                connection.query(
+                  "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
+                  [value, id],
+                  function (error, projects) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      console.log(index);
+                      console.log(projects.length);
+                      if (index + 1 >= id_quotation.length) {
+                        response.ok("Data has been saved", res);
+                      }
+                    }
+                  }
+                );
+              });
+            }
+          }
+        );
       }
     }
   );
@@ -1370,74 +1485,75 @@ exports.approvalProject = function (req, res) {
       if (error) {
         console.log(error);
       } else {
-        //response.ok('Data has been save',res)
-        connection.query(
-          "SELECT * FROM budget_transaction_project where project_id=?",
-          [id],
-          function (error, transaction_project, fields) {
-            if (error) {
-              console.log(error);
-            } else {
-              transaction_project.map((value) => {
-                //rquest {amount:budget,date:date,type:type,description:description,image:image,account_Id:account:id}
-                var account = [
-                  value.amount,
-                  dateFormat(value.date, "yyyy-mm-dd"),
-                  "out",
-                  description,
-                  "",
-                  value.account_id,
-                ];
-                accounts.push(account);
-              });
-
-              //create transaction accounts
-              var sql =
-                "INSERT INTO transaction_account (amount,date,type,description,image,account_id) VALUES ?";
-              var values = accounts;
-
-              connection_hrd.query(
-                sql,
-                [values],
-                function (erro, tranasaction_accounts, fields) {
-                  if (error) {
-                    console.log(error);
-                  } else {
-                    response.ok("Data has been save", res);
-                    var values = req.body.profits;
-
-                    id_quotation.map((value, index) => {
-                      connection.query(
-                        "UPDATE quotations SET project_id=? WHERE id=?",
-                        [id, value],
-                        function (error, update) {
-                          if (error) {
-                            console.log(error);
-                          } else {
-                            if (index >= id_quotation.length) {
-                              response.ok("Data has been save", res);
-                            }
-                          }
-                        }
-                      );
-                    });
-
-                    // transaksi laba rugi
-                    //   connection.query("INSER?",[values],function(error,rows,fields){
-                    //     if (error){
-                    //     console.log(error)
-
-                    //     }else{
-                    //         response.ok("Data has been save",res)
-
-                    //     }
-                    // })
-                  }
+        console.log(id_quotation);
+        id_quotation.map((value, index) => {
+          connection.query(
+            "UPDATE quotations SET project_id=? WHERE id=?",
+            [id, value],
+            function (error, update) {
+              if (error) {
+                console.log(error);
+              } else {
+                if (index + 1 >= id_quotation.length) {
+                  response.ok("Data has been save", res);
                 }
-              );
+              }
             }
-          }
-        );
+          );
+        });
+        // response.ok("Data has been save", res);
+        // response.ok('Data has been save',res)
+        // connection.query(
+        //   "SELECT * FROM budget_transaction_project where project_id=?",
+        //   [id],
+        //   function (error, transaction_project, fields) {
+        //     if (error) {
+        //       console.log(error);
+        //     } else {
+        //       transaction_project.map((value) => {
+        //         //rquest {amount:budget,date:date,type:type,description:description,image:image,account_Id:account:id}
+        //         var account = [
+        //           value.amount,
+        //           dateFormat(value.date, "yyyy-mm-dd"),
+        //           "out",
+        //           description,
+        //           "",
+        //           value.account_id,
+        //         ];
+        //         accounts.push(account);
+        //       });
+
+        //       //create transaction accounts
+        //       var sql =
+        //         "INSERT INTO transaction_account (amount,date,type,description,image,account_id) VALUES ?";
+        //       var values = accounts;
+
+        //       connection_hrd.query(
+        //         sql,
+        //         [values],
+        //         function (erro, tranasaction_accounts, fields) {
+        //           if (error) {
+        //             console.log(error);
+        //           } else {
+        //             response.ok("Data has been save", res);
+        //             var values = req.body.profits;
+
+        //             // transaksi laba rugi
+        //             //   connection.query("INSER?",[values],function(error,rows,fields){
+        //             //     if (error){
+        //             //     console.log(error)
+
+        //             //     }else{
+        //             //         response.ok("Data has been save",res)
+
+        //             //     }
+        //             // })
+        //           }
+        //         }
+        //       );
+        //     }
+        //   }
+        // );
       }
     }
   );
@@ -2950,7 +3066,7 @@ exports.deleteCostProject = function (req, res) {
 //in out transactions
 exports.getInOutTransactions = function (req, res) {
   connection.query(
-    "SELECT count(*) as count  FROM in_out_transactions",
+    "SELECT MAX(SUBSTRING(inout_number,-3)) as count from in_out_transactions WHERE Date(created_at)=CURDATE()",
     function (error, count, fields) {
       if (error) {
         console.log(error);
@@ -2961,7 +3077,8 @@ exports.getInOutTransactions = function (req, res) {
         var year = d.getFullYear();
         var date = d.getDate();
         var date = "00".substr(String(date).length) + date;
-        var count = count[0]["count"] + 1;
+        var count =
+          count[0]["count"] == null ? 1 : parseInt(count[0]["count"]) + 1;
         var counter = "000".substr(String(count).length) + count;
         var project_number = "IO-EO" + date + month + year + "-" + counter;
         response.ok(project_number, res);
@@ -3201,7 +3318,6 @@ exports.getAllFakturPayment = function (req, res) {
                       [id],
                       function (error, count_unfinished) {
                         if (error) {
-                          console.log("4");
                           console.log(error);
                         } else {
                           var data = {
@@ -3284,7 +3400,7 @@ exports.getAllFakturPaymentQO = function (req, res) {
 
 exports.getPaymentNumber = function (req, res) {
   connection.query(
-    "SELECT count(*) as count  FROM payment_faktur",
+    "SELECT MAX(SUBSTRING(transaction_number,-3)) as count from payment_faktur WHERE  Date(created_at)=CURDATE()",
     function (error, count, fields) {
       if (error) {
         console.log(error);
@@ -3295,7 +3411,9 @@ exports.getPaymentNumber = function (req, res) {
         var year = d.getFullYear();
         var date = d.getDate();
         var date = "00".substr(String(date).length) + date;
-        var count = count[0]["count"] + 1;
+        // var count = parseInt(count[0]["count"]) + 1;
+        var count =
+          count[0]["count"] == null ? 1 : parseInt(count[0]["count"]) + 1;
         var counter = "000".substr(String(count).length) + count;
         var project_number = "TR-" + date + month + year + "-" + counter;
         response.ok(project_number, res);
@@ -3315,7 +3433,7 @@ exports.creteTransactionFaktur = function (req, res) {
   //var transactiond_data=req.body.trnsaction_data;
   var date = req.body.date_transaction;
   var customer_id = req.body.customer_id;
-  console.log(date);
+
   connection.query(
     "INSERT INTO payment_faktur(transaction_number,amount,account_id,date,description,customer_id) VALUES (?,?,?,?,?,?)",
     [
@@ -3350,7 +3468,81 @@ exports.creteTransactionFaktur = function (req, res) {
                       if (error) {
                         console.log(error);
                       } else {
-                        if (value.acount_beban == false) {
+                        // connection_hrd.query(
+                        //   "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                        //   [
+                        //     date,
+                        //     value.amount,
+                        //     `${transaction_number}/${value.faktur_number}/${description}`,
+                        //     "in",
+                        //     value.account_id,
+                        //     transaction_number,
+                        //   ],
+                        //   function (error, rows, fields) {
+                        //     if (error) {
+                        //       console.log(error);
+                        //     } else {
+                        //       connection.query(
+                        //         "SELECT id FROM projects WHERE project_number=?",
+                        //         [value.project_number],
+                        //         function (error, project_id) {
+                        //           if (error) {
+                        //             console.log(error);
+                        //           } else {
+                        //             connection.query(
+                        //               "INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) VALUES(?,?,?,?,?,?,?)",
+                        //               [
+                        //                 date,
+                        //                 `${value.quotation_number}/${value.project_number}/${description}`,
+                        //                 value.amount,
+                        //                 "in",
+                        //                 project_id[0].id,
+                        //                 transaction_number,
+                        //                 "payment_faktur",
+                        //               ],
+                        //               function (error, rows) {
+                        //                 if (error) {
+                        //                   console.log(error);
+                        //                 } else {
+                        //                   // in account piutang
+                        //                   connection_hrd.query(
+                        //                     "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                        //                     [
+                        //                       date,
+                        //                       value.amount,
+                        //                       `${transaction_number}/${value.faktur_number}/${description}`,
+                        //                       "out",
+                        //                       "108",
+                        //                       `${value.faktur_number}_payment_faktur`,
+                        //                     ],
+                        //                     function (error, fields) {
+                        //                       if (error) {
+                        //                         console.log(error);
+                        //                       } else {
+                        //                         if (
+                        //                           index + 1 >=
+                        //                           payment_faktur.length
+                        //                         ) {
+                        //                           response.ok(
+                        //                             "Data has been save",
+                        //                             res
+                        //                           );
+                        //                         }
+                        //                       }
+                        //                     }
+                        //                   );
+                        //                 }
+                        //               }
+                        //             );
+                        //           }
+                        //         }
+                        //       );
+                        //     }
+                        //   }
+                        // );
+                        console.log(value.account_beban);
+                        if (value.account_beban === "false") {
+                          console.log(value.account_beban);
                           connection_hrd.query(
                             "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
                             [
@@ -4115,6 +4307,26 @@ exports.deleteAddSaldoPicTB = function (req, res) {
             }
           }
         );
+      }
+    }
+  );
+};
+
+exports.updateCompany = function (req, res) {
+  const name = req.body.name;
+  const address = req.body.address;
+  const fax = req.body.fax;
+  const phone = req.body.phone;
+  const signer = req.body.signer;
+
+  connection.query(
+    "UPDATE company SET name=?,address=?,fax=?,phone=?,signer=? WHERE id=1",
+    [name, address, fax, phone, signer],
+    function (error, rows) {
+      if (error) {
+        console.log(error);
+      } else {
+        response.ok("Data has been save", res);
       }
     }
   );

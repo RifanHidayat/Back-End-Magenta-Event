@@ -13,6 +13,8 @@ module.exports = function (app) {
 
   //get data quotation
   app.route("/api/quotations").get(json.getAllDataQuotations);
+  app.route("/api/quotations/checked").get(json.checkQuotations);
+  app.route("/api/quotations/checked/all").get(json.checkQuotationsAll);
 
   app.route("/api/projects/project-number").get(json.getPojectNumber);
   app.route("/api/projects").get(json.getAllDataProjects);
@@ -185,4 +187,6 @@ module.exports = function (app) {
     .get(json.detailPaymentInvoice);
 
   app.route("/api/accounts/transaction/remaining").post(json.piutang);
+
+  app.route("/api/company").patch(json.updateCompany);
 };
