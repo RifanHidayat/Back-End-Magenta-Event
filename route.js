@@ -2,7 +2,20 @@
 const { Router } = require("express");
 const express = require("express");
 const controller = require("./controller/index");
+const purchaseOrder = require("./model/website/PurchaseOrder");
+const purchaseReturn = require("./model/website/PurchaseReturn");
+//const purchaseTransactions = require("./model/website/PurchaseTransaction");
 const router = express.Router();
+require("express-group-routes");
+
+//grouping
+const suppliers = "/api/supplier";
+const products = "/api/product";
+const purchases = "/api/purchase-order";
+const purchaseTransactions = "/api/purchase-transaction";
+const purchaseReceipts = "/api/purchase-receipt";
+const purchaseReturns = "/api/purchase-return";
+const purchaseReturnTransactions = "/api/purchase-return-transaction";
 
 //show quotation
 module.exports = function (app) {
@@ -74,7 +87,10 @@ module.exports = function (app) {
   //show account
   app.route("/api/accounts").get(json.getAllAccount);
   //show detail account
-  app.route("/api/accounts/detail-account/:id").get(json.getDetailAccount);
+  // app.route("/api/accounts/detail-account/:id").get(json.getDetailAccount);
+  app
+    .route("/api/accounts/detail-account/:id")
+    .get(controller.bank_accounts.getDetailAccount);
   //create account
   app.route("/api/accounts/create-account").post(json.createAccount);
   //create account
@@ -113,7 +129,7 @@ module.exports = function (app) {
 
   //out transactions
   app.route("/api/transactions/out").post(json.createOutTransaction);
-  app.route("/api/pictb/:id/transactions/out").get(json.getAllOutTransaction);
+  // app.route("/api/pictb/:id/transactions/out").get(json.getAllOutTransaction);
   app
     .route("/api/transactions/out/:id/:project_id/:pictb_id")
     .delete(json.deleteOutTransactions);
@@ -164,6 +180,9 @@ module.exports = function (app) {
   app
     .route("/api/project/transactions/approval/:id")
     .patch(controller.transaction_project.approval);
+  app
+    .route("/api/project/transactions/rejection/:id")
+    .patch(controller.transaction_project.rejection);
 
   app.route("/api/faktur/:id/payment").get(json.getAllFakturPayment);
 
@@ -185,8 +204,137 @@ module.exports = function (app) {
   app
     .route("/api/faktur/:faktur_number/payment/invoice")
     .get(json.detailPaymentInvoice);
-
   app.route("/api/accounts/transaction/remaining").post(json.piutang);
-
   app.route("/api/company").patch(json.updateCompany);
+  app.route("/api/employess/:id/attendance").get(json.attendacenEmployess);
+
+  //transaction tb
+  app.route("/api/add-tb-transactions").post(controller.transactionTB.create);
+  app.route("/api/add-tb-transactions").get(controller.transactionTB.show);
+  app
+    .route("/api/add-tb-transactions/:pictb_id")
+    .get(controller.transactionTB.manage);
+  app
+    .route("/api/add-tb-transactions/:id")
+    .delete(controller.transactionTB.destroy);
+  app
+    .route("/add-tb-transactions/balance")
+    .get(controller.transactionTB.balance);
+  app
+    .route("/api/pictb/:pictb_id/tb-transactions/quotation-po/:quotation_po_id")
+    .get(controller.transactionTB.transactions);
+
+  //quotation po
+  app.route("/api/quotation-po").get(controller.quotationPO.show);
+
+  app
+    .route("/api/pictb/:pictb_id/quotation-po/balance/:quotation_po_id")
+    .get(controller.quotationPO.balance);
+
+  app.route("/api/quotation-po/:id").get(controller.quotationPO.transactions);
+  app.route("/api/quotation-po/detail/:id").get(controller.quotationPO.detail);
+
+  //out transactions
+  app
+    .route("/api/outTransactions/:pictb_id")
+    .get(controller.outTransactions.manage);
+
+  app
+    .route("/api/pictb/:pictb_id/transactions/out")
+    .get(controller.outTransactions.manage);
+
+  //suppliers
+  app.route(`${suppliers}`).get(controller.suppliers.show);
+  app.route(`${suppliers}`).post(controller.suppliers.create);
+  app.route(`${suppliers}/:id`).patch(controller.suppliers.update);
+  app.route(`${suppliers}/:id`).delete(controller.suppliers.destroy);
+  app.route(`${suppliers}/:id`).get(controller.suppliers.detail);
+  app.route(`${suppliers}/pay/:id`).get(controller.suppliers.payment);
+  app.route(`${suppliers}/pay`).post(controller.suppliers.pay);
+
+  //Product
+  app.route(`${products}`).get(controller.products.show);
+  app.route(`${products}`).post(controller.products.create);
+  app.route(`${products}/:id`).patch(controller.products.update);
+  app.route(`${products}/:id`).delete(controller.products.destroy);
+  app.route(`${products}/:id`).get(controller.products.detail);
+
+  //Purchase order
+  app.route(`${purchases}`).get(controller.purchaseOrder.show);
+  app.route(`${purchases}`).post(controller.purchaseOrder.create);
+  //app.route(`${purchases}`).post(controller.products.create);
+  app.route(`${purchases}/:id`).patch(controller.products.update);
+  app.route(`${purchases}/:id`).delete(controller.purchaseOrder.destroy);
+  app.route(`${purchases}/:id`).get(controller.products.detail);
+  app.route(`${purchases}/:id/product`).get(controller.purchaseOrder.products);
+
+  //purchhase Transactions
+  app
+    .route(`${purchaseTransactions}`)
+    .get(controller.purchaseTransactions.show);
+  app
+    .route(`${purchaseTransactions}`)
+    .post(controller.purchaseTransactions.create);
+  app
+    .route(`${purchaseTransactions}/:id`)
+    .patch(controller.purchaseTransactions.update);
+  app
+    .route(`${purchaseTransactions}/:id`)
+    .delete(controller.purchaseOrder.destroy);
+  app
+    .route(`${purchaseTransactions}/:id`)
+    .get(controller.purchaseTransactions.detail);
+
+  //purchase receipt
+  app.route(`${purchaseReceipts}`).get(controller.purchaseReceipts.show);
+  app.route(`${purchaseReceipts}`).post(controller.purchaseReceipts.create);
+  app
+    .route(`${purchaseReceipts}/:id`)
+    .patch(controller.purchaseReceipts.update);
+  app
+    .route(`${purchaseReceipts}/:id`)
+    .delete(controller.purchaseReceipts.destroy);
+  app.route(`${purchaseReceipts}/:id`).get(controller.purchaseReceipts.detail);
+  app
+    .route(`${purchaseReceipts}/:id/product`)
+    .get(controller.purchaseReceipts.products);
+  app
+    .route(`${purchaseReceipts}/:id/history`)
+    .get(controller.purchaseReceipts.history);
+
+  //purchase return
+  app.route(`${purchaseReturn}`).get(controller.purchaseReturns.show);
+  app.route(`${purchaseReturns}`).post(controller.purchaseReturns.create);
+  app.route(`${purchaseReturns}/:id`).patch(controller.purchaseReturns.update);
+  app
+    .route(`${purchaseReturns}/:id`)
+    .delete(controller.purchaseReturns.destroy);
+  app.route(`${purchaseReturn}/:id`).get(controller.purchaseReturns.detail);
+  app
+    .route(`${purchaseReturns}/:id/product`)
+    .get(controller.purchaseReturns.products);
+  app
+    .route(`${purchaseReturns}/:id/history`)
+    .get(controller.purchaseReturns.history);
+
+  //Purchase return transaction
+  app
+    .route(`${purchaseReturnTransactions}`)
+    .get(controller.purchaseReturnTransactions.show);
+  app
+    .route(`${purchaseReturnTransactions}`)
+    .post(controller.purchaseReturnTransactions.create);
+  app.route(`${purchaseReturnTransactions}`).post(controller.products.create);
+  app
+    .route(`${purchaseReturnTransactions}/:id`)
+    .patch(controller.products.update);
+  app
+    .route(`${purchaseReturnTransactions}/:id`)
+    .delete(controller.purchaseOrder.destroy);
+  app
+    .route(`${purchaseReturnTransactions}/:id`)
+    .get(controller.purchaseReturnTransactions.detail);
+  app
+    .route(`${purchaseReturnTransactions}/:id/product`)
+    .get(controller.purchaseReturnTransactions.products);
 };

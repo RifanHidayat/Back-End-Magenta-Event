@@ -319,4 +319,32 @@ controller.approval = async function (req, res) {
   }
 };
 
+controller.rejection = async function (req, res) {
+  try {
+    await model.transaction_project
+      .update(
+        {
+          status: req.body.status,
+        },
+        {
+          where: {
+            id: req.params.id,
+          },
+        }
+      )
+      .then((result) => {
+        res.status(200).json({
+          code: 200,
+          message: "Data has been save",
+          data: result,
+        });
+      });
+  } catch (error) {
+    res.status(404).json({
+      code: 404,
+      message: error + "",
+    });
+  }
+};
+
 module.exports = controller;

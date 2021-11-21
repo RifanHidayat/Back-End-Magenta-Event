@@ -3,9 +3,14 @@
 var response = require("./response");
 var connection = require("./connection");
 var connection_hrd = require("./connection_hrd");
+var connection_finance = require("./connection_finance");
 const conn = require("./connection");
 var dateFormat = require("dateformat");
 const faktur = require("./model/website/faktur");
+require("dotenv/config");
+
+const hppAccount = "111";
+const piutangAccount = "100";
 
 exports.index = function (req, res) {
   response.ok("aplikasi berjalan", res);
@@ -21,7 +26,7 @@ exports.getAllDataQuotations = function (req, res) {
       } else {
         if (projects.length <= 0) {
           connection.query(
-            "SELECT * FROM quotations  WHERE status=?",
+            "SELECT * FROM quotations JOIN customer ON customer.id=quotations.id_customer  WHERE status=?",
             ["Final"],
             function (error, rows, fields) {
               if (error) {
@@ -34,7 +39,7 @@ exports.getAllDataQuotations = function (req, res) {
         } else {
           // SELECT  * ,quotations.id as id, quotations.quotation_number,quotations.grand_total as grand_total,projects.status as project_status FROM quotations LEFT JOIN projects ON quotations.id IN (projects.id_quotation) where quotations.status=? AND (projects.status=? OR projects.status is null)",["Final","rejected
           connection.query(
-            "SELECT * ,quotations.id as id, quotations.grand_total as grand_total, quotations.quotation_number  as quotation_number FROM quotations LEFT JOIN projects ON projects.id=quotations.project_id WHERE quotations.status='Final' AND (project_number is null OR projects.status !='approved')",
+            "SELECT * ,quotations.id as id, quotations.grand_total as grand_total, quotations.quotation_number  as quotation_number FROM quotations JOIN customer ON customer.id=quotations.id_customer LEFT JOIN projects ON projects.id=quotations.project_id WHERE quotations.status='Final' AND (project_number is null OR projects.status !='approved')",
             function (error, rows, fields) {
               if (error) {
                 console.log(error);
@@ -147,6 +152,7 @@ exports.getAllDataProjects = async function (req, res) {
                                     latitude: value.latitude,
                                     grand_total: value.grand_total,
                                     status: value.status,
+                                    source: value.source,
                                     total_task_completed:
                                       total_task[0].total_task_completed,
                                     total_all_task: tasks.length,
@@ -187,6 +193,9 @@ exports.getAllDataProjectsByEmployees = async function (req, res) {
   let page = parseInt(req.query.page) || 1;
   let start = 0 + (page - 1) * limit;
   let end = page * limit;
+
+  // SELECT * ,member_project.status as status_member,projects.status as status,projects.id as id,projects.id_quotation as id_quotation  FROM projects JOIN member_project ON member_project.project_id=projects.id WHERE projects.status=? AND employee_id IN (?) ORDER BY projects.id DESC LiMIT ? OFFSET ?
+  // SELECT * ,member_project.status as status_member,projects.status as status,projects.id as id,projects.id_quotation as id_quotation  FROM projects JOIN member_project ON member_project.project_id=projects.id WHERE projects.status=?   ORDER BY projects.id DESC LiMIT ? OFFSET ?
 
   connection.query(
     "SELECT * ,member_project.status as status_member,projects.status as status,projects.id as id,projects.id_quotation as id_quotation  FROM projects JOIN member_project ON member_project.project_id=projects.id WHERE projects.status=? AND employee_id IN (?) ORDER BY projects.id DESC LiMIT ? OFFSET ?",
@@ -251,7 +260,8 @@ exports.getAllDataProjectsByEmployees = async function (req, res) {
                                       latitude: value.latitude,
                                       grand_total: value.grand_total,
                                       status: value.status,
-                                      status_member: value.status_member,
+                                      // status_member: value.status_member,
+                                      status_member: "pic",
 
                                       total_task_completed:
                                         total_task[0].total_task_completed,
@@ -317,15 +327,13 @@ exports.createDataProjects = function (req, res) {
   var id_quotation = req.body.id_quotation;
   var quotation_number = req.body.quotation_number;
   var status = req.body.status;
+  var location = req.body.location;
   var quotations = req.body.quotations;
+  var source = req.body.source;
 
-  // id_quotation.filter((value) => {
-  //   connection.query("SELECT * FROM projects WHERE id_quotation  IN ()");
-  // });
-  //connection.query("SELECT * FROM projects where id_quotation")
-
+  // create project EO
   connection.query(
-    "INSERT INTO projects(project_number,project_created_date,project_start_date,project_end_date,event_customer,  event_pic,description,latitude,longtitude,grand_total,id_quotation,quotation_number,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT INTO projects(project_number,project_created_date,project_start_date,project_end_date,event_customer,  event_pic,description,latitude,longtitude,grand_total,id_quotation,quotation_number,status,location,source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     [
       project_number,
       project_created_date,
@@ -340,29 +348,52 @@ exports.createDataProjects = function (req, res) {
       id_quotation.toString(),
       quotation_number,
       status,
+      location,
+      source,
     ],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
         var id = rows["insertId"];
-        id_quotation.map((value, index) => {
-          connection.query(
-            "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
-            [value, id],
-            function (error, projects) {
-              if (error) {
-                console.log(error);
-              } else {
-                console.log(index);
-                console.log(projects.length);
-                if (index + 1 >= id_quotation.length) {
-                  response.ok("Data has been saved", res);
-                }
-              }
+
+        connection.query(
+          "INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) VALUES (?,?,?,?,?,?,?)",
+          [
+            project_created_date,
+            description,
+            grand_total,
+            "in",
+            id,
+
+            id,
+            "project",
+          ],
+          (error, rows, fields) => {
+            if (error) {
+              console.log(error);
+            } else {
+              id_quotation.map((value, index) => {
+                connection.query(
+                  "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
+                  [value, id],
+                  function (error, projects) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      console.log(index);
+                      console.log(projects.length);
+                      if (index + 1 >= id_quotation.length) {
+                        response.ok("Data has been saved", res);
+                      }
+                    }
+                  }
+                );
+              });
             }
-          );
-        });
+          }
+        );
+
         //response.ok("Data has been saved", res);
         // var id=rows['insertId'];
         // id_quotation.map((value,index)=>{
@@ -595,6 +626,8 @@ exports.getDetailProject = function (req, res) {
                                                         rows[0]["members"]
                                                       ),
                                                       status: rows[0]["status"],
+                                                      location:
+                                                        rows[0]["location"],
                                                       budget: budget,
                                                       tasks: tasks,
                                                       quotations: quotations,
@@ -630,9 +663,11 @@ exports.getDetailProject = function (req, res) {
                                     latitude: rows[0]["latitude"],
                                     longtitude: rows[0]["longtitude"],
                                     description: rows[0]["description"],
+                                    source: rows[0]["source"],
                                     total_project_cost: rows[0]["grand_total"],
                                     members: JSON.parse(rows[0]["members"]),
                                     status: rows[0]["status"],
+                                    location: rows[0]["location"],
                                     budget: budgets,
                                     tasks: tasks,
                                     quotations: quotations,
@@ -885,7 +920,7 @@ exports.getPojectNumber = function (req, res) {
         var count =
           count[0]["count"] == null ? 1 : parseInt(count[0]["count"]) + 1;
         var counter = "000".substr(String(count).length) + count;
-        var project_number = "PN-" + date + month + year + "-" + counter;
+        var project_number = "-" + date + month + year + "-" + counter;
         response.ok(project_number, res);
       }
     }
@@ -905,11 +940,12 @@ exports.editDataProjects = function (req, res) {
   var grand_total = req.body.total_project_cost;
   var id_quotation = req.body.id_quotation;
   var quotation_number = req.body.quotation_number;
+  var location = req.body.location;
   var id = req.params.id;
   //console.log(id_quotation);
   console.log(id_quotation);
   connection.query(
-    "UPDATE  projects SET project_number=?,project_created_date=?,project_start_date=?,project_end_date=?,event_customer=?,event_pic=?,description=?,latitude=?,longtitude=?,grand_total=?,id_quotation=?,quotation_number=? where id=?",
+    "UPDATE  projects SET project_number=?,project_created_date=?,project_start_date=?,project_end_date=?,event_customer=?,event_pic=?,description=?,latitude=?,longtitude=?,grand_total=?,id_quotation=?,quotation_number=?,location=? where id=?",
     [
       project_number,
       project_created_date,
@@ -923,6 +959,7 @@ exports.editDataProjects = function (req, res) {
       grand_total,
       id_quotation.toString(),
       quotation_number,
+      location,
       id,
     ],
     function (error, rows, fields) {
@@ -939,23 +976,45 @@ exports.editDataProjects = function (req, res) {
             if (error) {
               console.log(error);
             } else {
-              id_quotation.map((value, index) => {
-                connection.query(
-                  "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
-                  [value, id],
-                  function (error, projects) {
-                    if (error) {
-                      console.log(error);
-                    } else {
-                      console.log(index);
-                      console.log(projects.length);
-                      if (index + 1 >= id_quotation.length) {
-                        response.ok("Data has been saved", res);
-                      }
-                    }
+              // connection.query(
+              //   "INSERT INTO transactions_project(date,description,amount,type,project_id,connection_id,connection_table) VALUES (?,?,?,?,?,?,?)",
+              //   [
+              //     project_created_date,
+              //     description,
+              //     grand_total,
+              //     "in",
+              //     id,
+
+              //     id,
+              //     "project",
+              //   ],
+              connection.query(
+                "UPDATE transactions_project SET  date=?,description=?,amount=? WHERE connection_id=? AND connection_table=?",
+                [project_created_date, description, grand_total, id, "project"],
+                function (error, row, field) {
+                  if (error) {
+                    console.log(error);
+                  } else {
+                    id_quotation.map((value, index) => {
+                      connection.query(
+                        "INSERT INTO projects_quotations(quotation_id,project_id) VALUES(?,?)",
+                        [value, id],
+                        function (error, projects) {
+                          if (error) {
+                            console.log(error);
+                          } else {
+                            console.log(index);
+                            console.log(projects.length);
+                            if (index + 1 >= id_quotation.length) {
+                              response.ok("Data has been saved", res);
+                            }
+                          }
+                        }
+                      );
+                    });
                   }
-                );
-              });
+                }
+              );
             }
           }
         );
@@ -1017,9 +1076,11 @@ exports.createTransactionHangerBudget = function (req, res) {
   var values_transactions = data_transactions_account;
   var ids = req.body.ids;
 
+  console.log(values_transactions);
+
   //var values = data;
   var sql =
-    "INSERT INTO budget_transaction_project (amount,date,type,description,image,account_id,project_id,transfer_to) VALUES ? ";
+    "INSERT INTO budget_transaction_project (amount,date,type,description,image,account_id,coa_id,project_id,transfer_to) VALUES ? ";
 
   // connection.query(sql, [values], function (error, rows, fields) {
   //   if (error) {
@@ -1030,15 +1091,15 @@ exports.createTransactionHangerBudget = function (req, res) {
   // });
 
   // response.ok("data has been save",res);
-  connection_hrd.query(
-    "DELETE FROM transaction_account where transaction_id=?",
-    [transaction_id],
+  connection_finance.query(
+    "DELETE FROM account_transactions where table_id=? AND table_name=?",
+    [project_id, "budget_transaction_project"],
     function (error, fields) {
       if (error) {
         console.log(error);
       } else {
-        connection_hrd.query(
-          "INSERT INTO transaction_account (amount,date,type,description,image,account_id,transaction_id) VALUES ?",
+        connection_finance.query(
+          "INSERT INTO account_transactions (number,amount,date,type,description,image,accountId,coa_id,table_id,table_name) VALUES ?",
           [values_transactions],
           function (error, fields) {
             if (error) {
@@ -1278,15 +1339,15 @@ exports.getDetailTransactionsProject = function (req, res) {
   var transactions_project = [];
   var balance = 0;
   connection.query(
-    "SELECT * FROM budget_transaction_project WHERE project_id=? ORDER BY date ASC,id DESC",
-    [project_id],
+    "SELECT * FROM budget_transaction_project WHERE project_id=? AND (status=? OR status is null OR status=?) ORDER BY date ASC,id ASC",
+    [project_id, "approved", "pending"],
     function (error, transactions, fields) {
       if (error) {
         console.log(error);
       } else {
         connection.query(
-          "SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=?",
-          [project_id],
+          "SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out from budget_transaction_project where project_id=? AND (status=? OR status is null OR status=?)",
+          [project_id, "approved", "pending"],
           function (error, total, fields) {
             if (error) {
               console.log(error);
@@ -1412,7 +1473,7 @@ exports.getAllTransactionsProject = function (req, res) {
   var persentase;
   var tempIn = 0;
   connection.query(
-    "SELECT * FROM transactions_project where project_id=? ORDER BY date ASC,id DESC",
+    "SELECT * FROM transactions_project where project_id=? ORDER BY date ASC,id ASC",
     [id],
     function (error, rows, fields) {
       if (error) {
@@ -1580,21 +1641,37 @@ exports.createAccount = function (req, res) {
   var bank_account_name = req.body.bank_account_name;
   var bank_account_number = req.body.bank_account_number;
   var bank_account_balance = req.body.bank_account_balance;
+  var status = req.body.status;
   var date = req.body.date;
   var type = req.body.type;
 
   //insert to account table
   connection_hrd.query(
-    "INSERT INTO bank_accounts(bank_name,account_number,account_balance,type) VALUES(?,?,?,?)",
-    [bank_account_name, bank_account_number, bank_account_balance, type],
+    "INSERT INTO bank_accounts(bank_name,account_number,account_balance,type,status) VALUES(?,?,?,?,?)",
+    [
+      bank_account_name,
+      bank_account_number,
+      bank_account_balance,
+      type,
+      status,
+    ],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
         var id = rows["insertId"];
         connection_hrd.query(
-          "INSERT INTO transaction_account(date,amount,type,account_id) values (?,?,?,?)",
-          [date, bank_account_balance, "in", id],
+          "INSERT INTO transaction_account(date,amount,type,account_id,bankAccountId,description,transaction_id) values (?,?,?,?,?,?)",
+          [
+            date,
+            bank_account_balance,
+            "in",
+            `${id}`,
+            `${id}`,
+            "Saldo Awal",
+            `opening_balance_eo_${id}`,
+          ],
+
           function (error, rows, fields) {
             if (error) {
               console.log(error);
@@ -1615,26 +1692,38 @@ exports.editAccount = function (req, res) {
   var bank_account_balance = req.body.bank_account_balance;
   var type = req.body.type;
   var id = req.params.id;
+  var status = req.body.status;
+  var date = req.body.date;
+  console.log(status);
 
   connection_hrd.query(
-    "UPDATE bank_accounts SET bank_name=?,account_number=?,account_balance=?,type=?  WHERE id=?",
-    [bank_account_name, bank_account_number, bank_account_balance, type, id],
+    "UPDATE bank_accounts SET bank_name=?,account_number=?,account_balance=?,type=?, status=?  WHERE id=?",
+    [
+      bank_account_name,
+      bank_account_number,
+      bank_account_balance,
+      type,
+      status,
+      id,
+    ],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
         // response.ok("Data has been updated",res)
-        response.ok("Data has been updated", res);
+        // response.ok("Data has been updated", res);
 
-        // connection_hrd.query("UPDATE transaction_account SET amount=? WHERE account_id=?",
-        // [bank_account_balance,type,id],
-        //     function(error,rows,fields){
-        //     if (error){
-        //         console.log(error)
-        //     }else{
-        //          response.ok("Data has been updated",res)
-        //     }
-        // });
+        connection_hrd.query(
+          "UPDATE transaction_account SET date=?, amount=? WHERE transaction_id=?",
+          [date, bank_account_balance, `opening_balance_eo_${id}`],
+          function (error, rows, fields) {
+            if (error) {
+              console.log(error);
+            } else {
+              response.ok("Data has been updated", res);
+            }
+          }
+        );
       }
     }
   );
@@ -1675,7 +1764,7 @@ exports.getAllAccount = function (req, res) {
     "SELECT * FROM bank_accounts ORDER BY id DESC",
     function (error, rows, fields) {
       if (error) {
-        console.log(erro);
+        console.log(error);
       } else {
         //response.ok(rows,res)
         rows.map((values, index) => {
@@ -1692,6 +1781,7 @@ exports.getAllAccount = function (req, res) {
                   account_number: values.account_number,
                   opening_balance: values.account_balance,
                   type: values.type,
+                  status: values.status,
                   balance: total[0].total_in - total[0].total_out,
                 };
                 data_transactions.push(data);
@@ -1727,7 +1817,7 @@ exports.getDetailAccount = function (req, res) {
               console.log(error);
             } else {
               connection_hrd.query(
-                "SELECT * FROM transaction_account where account_id=? ORDER BY date ASC,id DESC",
+                "SELECT * FROM transaction_account where account_id=? ORDER BY date ASC,id ASC",
                 [account_id],
                 function (error, transactions, fields) {
                   if (error) {
@@ -1759,12 +1849,14 @@ exports.getDetailAccount = function (req, res) {
                         account_number: rows[0]["account_number"],
                         account_balance: rows[0]["account_balance"],
                         type: rows[0]["type"],
+                        status: rows[0]["status"],
                         account_owner: rows[0]["account_owner"],
                         bank_code: rows[0]["bank_code"],
                         total_in: total[0]["total_in"],
                         total_out: total[0]["total_out"],
                         balance: total[0]["total_in"] - total[0]["total_out"],
                         date: total[0]["date"],
+
                         transactions: transactions_account,
                       };
                       response.ok(data, res);
@@ -1832,7 +1924,7 @@ exports.getDetailBudgets = function (req, res) {
   var total_in = 0;
 
   connection.query(
-    'select * from budget_transaction_project where project_id=? AND type="in" ORDER BY date ASC ',
+    'select * from budget_transaction_project where project_id=? AND type="in" ORDER BY date ASC,id ASC ',
     [project_id],
     function (error, rows, fields) {
       if (error) {
@@ -1911,7 +2003,7 @@ exports.getBudgetsProject = function (req, res) {
   var data_transactions = [];
 
   connection.query(
-    "select * from budget_transaction_project where project_id=? ORDER BY date DESC",
+    "select * from budget_transaction_project where project_id=? ORDER BY date DESC,id DESC",
     [project_id],
     function (error, rows, fields) {
       if (error) {
@@ -1927,8 +2019,8 @@ exports.getBudgetsProject = function (req, res) {
             } else {
               if (projects != "") {
                 connection.query(
-                  "SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM budget_transaction_project where project_id=?",
-                  [project_id],
+                  "SELECT SUM(IF(type = 'in', amount, 0)) as total_in,SUM(IF(type = 'out', amount, 0)) as total_out FROM budget_transaction_project where project_id=? AND (status=? OR status is null or status=?)",
+                  [project_id, "approved", "pending"],
                   function (error, total, fields) {
                     if (error) {
                       console.log(error);
@@ -2084,34 +2176,18 @@ exports.CreatePIC = function (req, res) {
   var balance = req.body.balance;
   var pic_id = req.body.pic_id;
 
-  var description = req.body.description;
-  var date = req.body.date;
-  var amount = req.body.amount;
-  var id_faktur = req.body.id_faktur;
-  var type = req.body.type;
-  var connection_table = "pic_tb";
+  var today = new Date();
+  var date =
+    today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + today.getDate();
 
   connection.query(
-    "INSERT INTO pic_tb(opening_balance,balance,pic_id) value(?,?,?)",
-    [opening_balance, balance, pic_id],
+    "INSERT INTO pic_tb(opening_balance,balance,pic_id,date) value(?,?,?,?)",
+    [0, 0, pic_id, date],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
-        //response.ok("Data has been save",res)
-        let id = rows["insertId"];
-
-        connection.query(
-          "INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",
-          [date, description, amount, type, id, id, connection_table],
-          function (error, transactions, fields) {
-            if (error) {
-              console.log(error);
-            } else {
-              response.ok("Data has been save", res);
-            }
-          }
-        );
+        response.ok("Data has been save", res);
       }
     }
   );
@@ -2120,18 +2196,19 @@ exports.EditPIC = function (req, res) {
   var opening_balance = req.body.opening_balance;
   var balance = req.body.balance;
   var pic_id = req.body.pic_id;
+  var date = req.body.date;
   var id = req.params.id;
   var connection_table = "pic_tb";
   connection.query(
-    "UPDATE pic_tb SET opening_balance=?,balance=?,pic_id=? where id=?",
-    [opening_balance, balance, pic_id, id],
+    "UPDATE pic_tb SET date=?, opening_balance=?, balance=?,pic_id=? where id=?",
+    [date, opening_balance, balance, pic_id, id],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
         connection.query(
-          "UPDATE transaction_tb SET amount=? where connection_id=? AND connection_table=?",
-          [opening_balance, id, connection_table],
+          "UPDATE transaction_tb SET amount=?,date=? where connection_id=? AND connection_table=?",
+          [opening_balance, date, id, connection_table],
           function (error, rows, fields) {
             if (error) {
               console.log(error);
@@ -2150,7 +2227,7 @@ exports.getAllPICTB = function (req, res) {
   var data;
 
   connection.query(
-    "SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance FROM pic_tb JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event",
+    "SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance FROM pic_tb JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event ORDER BY id DESC",
     function (error, rows, fields) {
       if (error) {
         console.log(error);
@@ -2171,6 +2248,7 @@ exports.getAllPICTB = function (req, res) {
                   email: values.email,
                   opening_balance: values.opening_balance,
                   balance: total[0].total_in - total[0].total_out,
+                  date: values.date,
                 };
                 data_transactions.push(data);
                 if (index + 1 >= rows.length) {
@@ -2218,14 +2296,14 @@ exports.getDetailPICTB = function (req, res) {
   var balance = 0;
 
   connection.query(
-    "SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance,pic_event.id_event FROM pic_tb JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event where id=?",
+    "SELECT pic_tb.id,pic_event.pic_name as name,pic_event.jabatan as position,pic_event.email,opening_balance,balance,pic_event.id_event,pic_tb.date as date FROM pic_tb  JOIN pic_event ON  pic_tb.pic_id=pic_event.id_event where id=?",
     [id],
     function (error, rows, fields) {
       if (error) {
         console.log(error);
       } else {
         connection.query(
-          "SELECT * FROM transaction_tb WHERE id_pictb=? ORDER By date ASC,id DESC",
+          "SELECT * FROM transaction_tb WHERE id_pictb=? ORDER By date ASC,id ASC",
           [id],
           function (error, transactions, fields) {
             if (error) {
@@ -2256,6 +2334,7 @@ exports.getDetailPICTB = function (req, res) {
                       transactions_pictb.push(data);
                     });
                     var data = {
+                      date: rows[0].date,
                       id: rows[0].id,
                       total_in:
                         total[0].total_in == null ? 0 : total[0].total_in,
@@ -2268,6 +2347,7 @@ exports.getDetailPICTB = function (req, res) {
                       position: rows[0].position,
                       email: rows[0].email,
                       event_id: rows[0].id_event,
+
                       transactions: transactions_pictb,
                     };
                     response.ok(data, res);
@@ -2289,7 +2369,7 @@ exports.getAllFaktur = function (req, res) {
 
   // SELECT *,projects.grand_total as total_project_cost,projects.id as project_id FROM faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number  JOIN projects  ON projects.id_quotation in (quotations.id)
   connection.query(
-    " SELECT *, projects.grand_total as total_project_cost , quotations.quotation_number as quotation_number FROM faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number JOIN projects ON projects.id=quotations.project_id",
+    " SELECT *, projects.project_number, projects.grand_total as total_project_cost , quotations.quotation_number as quotation_number FROM faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number JOIN projects ON projects.id=quotations.project_id",
     function (error, rows, fields) {
       // SELECT * , quotations.quotation_number as idd FROM faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number
       if (error) {
@@ -2655,7 +2735,7 @@ exports.getAllInTransaction = function (req, res) {
   let id = req.params.id;
   // SELECT *,projects.grand_total as total_project_cost,projects.id as project_id FROM in_transactions JOIN faktur ON in_transactions.faktur_id=faktur.id_faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number  JOIN projects  ON projects.id_quotation in (quotations.id
   connection.query(
-    "SELECT in_transactions.id as id,in_transactions.in_date as date,in_transactions.amount,in_transactions.faktur_id as faktur_id,quotations.pic_event,quotations.po_number,projects.project_number,projects.description,faktur.total_faktur,faktur.pembayaran,faktur.faktur_number,projects.id as porject_id,quotations.id_pic_event FROM in_transactions JOIN faktur ON in_transactions.faktur_id=faktur.id_faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number JOIN projects ON projects.id=quotations.project_id where in_transactions.pictb_id=?",
+    "SELECT in_transactions.id as id,in_transactions.in_date as date,in_transactions.amount,in_transactions.faktur_id as faktur_id,quotations.pic_event,quotations.po_number,projects.project_number,projects.description,faktur.total_faktur,faktur.pembayaran,faktur.faktur_number,projects.id as porject_id,quotations.id_pic_event FROM in_transactions JOIN faktur ON in_transactions.faktur_id=faktur.id_faktur JOIN quotations ON faktur.quotation_number=quotations.quotation_number JOIN projects ON projects.id=quotations.project_id where in_transactions.pictb_id=? ORDER BY in_transactions.id DESC",
     [id],
     function (error, rows, fields) {
       if (error) {
@@ -2678,9 +2758,28 @@ exports.createOutTransaction = function (req, res) {
   var amount = req.body.amount;
   var pictb_id_source = req.body.pictb_id_source;
   var connection_table = "out_transactions";
+  var out_amount_pictb = req.body.out_amount_pictb;
+  var out_amount_account = req.body.out_amount_account;
+  var account_id = req.body.account_id;
+  var quotationPoId = req.body.quotation_po_id;
+  var accountDescription = req.body.account_description;
+  var inAmountAccount = req.body.in_account_amount;
+
   connection.query(
-    "INSERT INTO out_transactions(date,description,amount,label,project_id,pictb_id,pictb_id_source) VALUES(?,?,?,?,?,?,?)",
-    [date, description, amount, label, project_id, pictb_id, pictb_id_source],
+    "INSERT INTO out_transactions(date,description,amount,out_pictb_amount,out_account_amount,label,quotationPoId,project_id,pictb_id,account_id,pictb_id_source) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+    [
+      date,
+      description,
+      amount,
+      out_amount_pictb,
+      out_amount_account,
+      label,
+      quotationPoId,
+      project_id,
+      pictb_id,
+      account_id,
+      pictb_id_source,
+    ],
     function (error, out_transactions, fields) {
       if (error) {
         console.log(error);
@@ -2692,8 +2791,8 @@ exports.createOutTransaction = function (req, res) {
             [
               date,
               description,
-              amount,
-              "out",
+              out_amount_pictb,
+              "in",
               project_id,
               connection_id,
               connection_table,
@@ -2702,29 +2801,40 @@ exports.createOutTransaction = function (req, res) {
               if (error) {
                 console.log(error);
               } else {
-                response.ok("Data has been save", res);
-                // connection.query("INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",[date,description,amount,'in',pictb_id_owner,connection_id,connection_table],function(error,transactions,fields){
-                //     if (error){
-                //         console.log(error)
-                //     }else{
-
-                //         response.ok("Data has been save",res)
-
-                //     }
-
-                // })
-                //response.ok("Data has been save",res)
+                // response.ok("Data has been save", res);
+                connection.query(
+                  "INSERT INTO transaction_tb(date,description,amount,type,quotationPoId,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?,?)",
+                  [
+                    date,
+                    description,
+                    amount,
+                    "out",
+                    quotationPoId,
+                    pictb_id_owner,
+                    connection_id,
+                    connection_table,
+                  ],
+                  function (error, transactions, fields) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      response.ok("Data has been save", res);
+                    }
+                  }
+                );
+                //response.ok("Data has been save", res);
               }
             }
           );
-        } else {
+        } else if (pictb_id != 0) {
           connection.query(
-            "INSERT INTO transaction_tb(date,description,amount,type,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?)",
+            "INSERT INTO transaction_tb(date,description,amount,type,quotationPoId,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?,?)",
             [
               date,
               description,
               amount,
               "out",
+              quotationPoId,
               pictb_id_owner,
               connection_id,
               connection_table,
@@ -2755,6 +2865,82 @@ exports.createOutTransaction = function (req, res) {
               }
             }
           );
+        } else {
+          console;
+          connection.query(
+            "INSERT INTO transaction_tb(date,description,amount,type,quotationPoId,id_pictb,connection_id,connection_table) value(?,?,?,?,?,?,?,?)",
+            [
+              date,
+              description,
+              out_amount_pictb,
+              "out",
+              quotationPoId,
+              pictb_id_owner,
+              connection_id,
+              connection_table,
+            ],
+            function (error, transactions, fields) {
+              if (error) {
+                console.log(error);
+              } else {
+                connection_finance.query(
+                  `SELECT * FROM accounts WHERE id=${hppAccount}`,
+                  function (error, row, fileds) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      connection_finance.query(
+                        "INSERT INTO account_transactions(date,description,amount,type,accountId,coa_id,table_id,table_name) value(?,?,?,?,?,?,?,?)",
+                        [
+                          date,
+                          accountDescription,
+                          out_amount_account,
+                          "out",
+                          account_id,
+                          hppAccount,
+                          connection_id,
+                          connection_table,
+                        ],
+                        function (error, transactions, fields) {
+                          if (error) {
+                            console.log(error);
+                          } else {
+                            connection_finance.query(
+                              "SELECT * FROM bank_accounts where id=?",
+                              [account_id],
+                              function (error, row, fields) {
+                                //response.ok("Data has been save", res);
+                                connection_finance.query(
+                                  "INSERT INTO account_transactions(date,description,amount,type,accountId,coa_id,table_id,table_name	) value(?,?,?,?,?,?,?,?)",
+                                  [
+                                    date,
+                                    accountDescription,
+                                    inAmountAccount,
+                                    "in",
+                                    hppAccount,
+                                    account_id,
+                                    connection_id,
+                                    connection_table,
+                                  ],
+                                  function (error, transactions, fields) {
+                                    if (error) {
+                                      console.log(error);
+                                    } else {
+                                      response.ok("Data has been save", res);
+                                    }
+                                  }
+                                );
+                              }
+                            );
+                          }
+                        }
+                      );
+                    }
+                  }
+                );
+              }
+            }
+          );
         }
       }
     }
@@ -2771,10 +2957,13 @@ exports.editOutTransaction = function (req, res) {
   var amount = req.body.amount;
   var connection_table = "out_transactions";
   var id = req.params.id;
+  var out_amount_pictb = req.body.out_amount_pictb;
+  var out_amount_account = req.body.out_amount_account;
+  var account_id = req.body.account_id;
 
   connection.query(
-    "UPDATE out_transactions SET date=?,description=?,amount=? where id=?",
-    [date, description, amount, id],
+    "UPDATE out_transactions SET date=?,description=?,amount=?,out_pictb_amount=?,out_account_amount=? where id=?",
+    [date, description, amount, out_amount_pictb, out_amount_account, id],
     function (error, out_transactions, fields) {
       if (error) {
         console.log(error);
@@ -2802,7 +2991,7 @@ exports.editOutTransaction = function (req, res) {
               }
             }
           );
-        } else {
+        } else if (pictb_id !== 0) {
           connection.query(
             "UPDATE transaction_tb SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=? AND type=?",
             [date, description, amount, id, connection_table, "out"],
@@ -2824,6 +3013,35 @@ exports.editOutTransaction = function (req, res) {
               }
             }
           );
+        } else {
+          connection.query(
+            "UPDATE transaction_tb SET date=?,description=?,amount=? WHERE connection_id=? AND connection_table=? AND type=?",
+            [date, description, out_amount_pictb, id, connection_table, "out"],
+            function (error, transactions, fields) {
+              if (error) {
+                console.log(error);
+              } else {
+                //response.ok("Data has been save", res);
+
+                connection_hrd.query(
+                  "UPDATE transaction_account SET date=?,description=?,amount=? WHERE transaction_id=?",
+                  [
+                    date,
+                    description,
+                    out_amount_account,
+                    `${connection_table}_${id}`,
+                  ],
+                  function (error, rows) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      response.ok("Data has been save", res);
+                    }
+                  }
+                );
+              }
+            }
+          );
         }
       }
     }
@@ -2833,7 +3051,7 @@ exports.editOutTransaction = function (req, res) {
 exports.getAllOutTransaction = function (req, res) {
   var id = req.params.id;
   connection.query(
-    "SELECT * FROM out_transactions WHERE pictb_id_source=?",
+    "SELECT * FROM out_transactions WHERE pictb_id_source=? ORDER BY id DESC",
     [id],
     function (error, out_transactions, fields) {
       if (error) {
@@ -2878,7 +3096,7 @@ exports.deleteOutTransactions = function (req, res) {
               }
             }
           );
-        } else {
+        } else if (pictb_id !== 0) {
           connection.query(
             "DELETE FROM transaction_tb where connection_id=? AND connection_table=?",
             [id, connection_table],
@@ -2887,6 +3105,29 @@ exports.deleteOutTransactions = function (req, res) {
                 console.log(error);
               } else {
                 response.ok("Data has been save", res);
+              }
+            }
+          );
+        } else {
+          connection.query(
+            "DELETE FROM transaction_tb where connection_id=? AND connection_table=?",
+            [id, connection_table],
+            function (error, rows) {
+              if (error) {
+                console.log(error);
+              } else {
+                //response.ok("Data has been save", res);
+                connection_hrd.query(
+                  "DELETE FROM account_transactions where table_id=? AND table_name=?",
+                  [id, connection_table],
+                  function (error, rows) {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      response.ok("Data has been save", res);
+                    }
+                  }
+                );
               }
             }
           );
@@ -2924,6 +3165,7 @@ exports.createTransactionOutProject = function (req, res) {
             project_id,
             connection_id,
             connection_table,
+            "111",
           ],
           function (error, transactions_project, fields) {
             if (error) {
@@ -2932,20 +3174,53 @@ exports.createTransactionOutProject = function (req, res) {
               // response.ok("Data has been save",res)
 
               connection_hrd.query(
-                "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
-                [
-                  date,
-                  amount,
-                  `${[project_number]} | ${description}`,
-                  "out",
-                  account_id,
-                  `${connection_id}_${connection_table}`,
-                ],
-                function (error, rows) {
+                "SELECT * FROM bank_accounts where id=?",
+                [hppAccount],
+                function (error, row, fields) {
                   if (error) {
                     console.log(error);
                   } else {
-                    response.ok("Data has been save", res);
+                    connection_finance.query(
+                      "INSERT INTO account_transactions(date,amount,description,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?)",
+                      [
+                        date,
+                        amount,
+                        `${[project_number]} | ${description}`,
+                        "out",
+                        account_id,
+                        hppAccount,
+                        connection_id,
+                        connection_table,
+                      ],
+                      function (error, rows) {
+                        if (error) {
+                          console.log(error);
+                        } else {
+                          // response.ok("Data has been save", res);
+
+                          connection_finance.query(
+                            "INSERT INTO account_transactions(date,amount,description,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?)",
+                            [
+                              date,
+                              amount,
+                              `${[project_number]} | ${description}`,
+                              "in",
+                              hppAccount,
+                              account_id,
+                              connection_id,
+                              connection_table,
+                            ],
+                            function (error, rows) {
+                              if (error) {
+                                console.log(error);
+                              } else {
+                                response.ok("Data has been save", res);
+                              }
+                            }
+                          );
+                        }
+                      }
+                    );
                   }
                 }
               );
@@ -2983,14 +3258,15 @@ exports.editTransactionOutProject = function (req, res) {
             } else {
               // response.ok("Data has been updated",res)
 
-              connection_hrd.query(
-                "UPDATE transaction_account SET date=?,description=?,amount=?,account_id=? where transaction_id=?",
+              connection_finance.query(
+                "UPDATE account_transactions SET date=?,description=?,amount=?,accountId=? where table_id=? AND table_name=?",
                 [
                   date,
                   `${project_number} | ${description}`,
                   amount,
                   account_id,
-                  `${id}_${connection_table}`,
+                  id,
+                  connection_table,
                 ],
                 function (error, rows, fields) {
                   if (error) {
@@ -3013,7 +3289,7 @@ exports.editTransactionOutProject = function (req, res) {
 exports.getAllCostProject = function (req, res) {
   var project_id = req.params.project_id;
   connection.query(
-    "SELECT * , A.id as id    FROM db_magentaeo.out_transaction_project A JOIN magenta_hrd.bank_accounts B ON  A.account_id = B.id where project_id=?",
+    "SELECT * , A.id as id  FROM db_magentaeo.out_transaction_project A JOIN magenta_finance.accounts B ON  A.account_id = B.id where project_id=? ORDER BY A.id DESC",
     [project_id],
     function (error, rows) {
       if (error) {
@@ -3044,9 +3320,9 @@ exports.deleteCostProject = function (req, res) {
             } else {
               //  response.ok("Data has been save",res)
 
-              connection_hrd.query(
-                "DELETE FROM transaction_account where transaction_id=?",
-                [`${id}_${connection_table}`],
+              connection_finance.query(
+                "DELETE FROM account_transactions where table_id=? AND table_name=?",
+                [id, connection_table],
                 function (error, rows, fields) {
                   if (error) {
                     console.log(error);
@@ -3065,12 +3341,13 @@ exports.deleteCostProject = function (req, res) {
 
 //in out transactions
 exports.getInOutTransactions = function (req, res) {
-  connection.query(
-    "SELECT MAX(SUBSTRING(inout_number,-3)) as count from in_out_transactions WHERE Date(created_at)=CURDATE()",
+  connection_finance.query(
+    "SELECT MAX(SUBSTRING(number,-3)) as count from account_transactions WHERE Date(created_at)=CURDATE() AND table_name='inout' ",
     function (error, count, fields) {
       if (error) {
         console.log(error);
       } else {
+        console.log(count);
         var d = new Date();
         var month = d.getMonth() + 1;
         var month = "00".substr(String(month).length) + month;
@@ -3117,20 +3394,70 @@ exports.createInOutTransaction = function (req, res) {
         console.log(error);
       } else {
         connection_hrd.query(
-          "INSERT INTO transaction_account(date,description,type,amount,account_id,transaction_id)VALUES(?,?,?,?,?,?)",
-          [date, description, "in", amount, in_account, inout_number],
-          function (error, out_transaction, fields) {
+          "SELECT * from bank_accounts WHERE id=?",
+          [in_account],
+          function (error, in_account_row, fields) {
             if (error) {
               console.log(error);
             } else {
               connection_hrd.query(
-                "INSERT INTO transaction_account(date,description,type,amount,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
-                [date, description, "out", amount, out_account, inout_number],
-                function (error, in_transaction, fields) {
+                "SELECT * FROM bank_accounts WHERE id=?",
+                [out_account],
+                function (error, out_account_row, fields) {
                   if (error) {
                     console.log(error);
                   } else {
-                    response.ok("Data has been save", res);
+                    connection_hrd.query(
+                      "INSERT INTO transaction_account(date,description,type,amount,account_id,bankAccountId,transaction_id,opponent_account_id,opponent_account_name,opponent_account_number)VALUES(?,?,?,?,?,?,?,?,?,?)",
+                      [
+                        date,
+                        description,
+                        "in",
+                        amount,
+                        in_account,
+                        in_account,
+                        inout_number,
+                        out_account,
+                        in_account_row != null
+                          ? in_account_row[0].bank_name
+                          : "",
+                        in_account_row != null
+                          ? in_account_row[0].account_number
+                          : "0",
+                      ],
+                      function (error, out_transaction, fields) {
+                        if (error) {
+                          console.log(error);
+                        } else {
+                          connection_hrd.query(
+                            "INSERT INTO transaction_account(date,description,type,amount,account_id,bankAccountId,transaction_id,opponent_account_id,opponent_account_name,opponent_account_number) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            [
+                              date,
+                              description,
+                              "out",
+                              amount,
+                              out_account,
+                              out_account,
+                              inout_number,
+                              in_account,
+                              out_account_row != null
+                                ? out_account_row[0].bank_name
+                                : "",
+                              out_account_row != null
+                                ? out_account_row[0].account_number
+                                : "0",
+                            ],
+                            function (error, in_transaction, fields) {
+                              if (error) {
+                                console.log(error);
+                              } else {
+                                response.ok("Data has been save", res);
+                              }
+                            }
+                          );
+                        }
+                      }
+                    );
                   }
                 }
               );
@@ -3158,20 +3485,70 @@ exports.editInOutTransaction = function (req, res) {
         console.log(error);
       } else {
         connection_hrd.query(
-          "UPDATE transaction_account SET date=?,description=?,amount=?,account_id=? WHERE transaction_id=? AND type=?",
-          [date, description, amount, in_account, inout_number, "in"],
-          function (error, out_transaction, fields) {
+          "SELECT * FROM bank_accounts where id=?",
+          [in_account],
+          function (error, in_account_row, fields) {
             if (error) {
               console.log(error);
             } else {
               connection_hrd.query(
-                "UPDATE transaction_account SET date=?,description=?,amount=?,account_id=? WHERE transaction_id=? AND type=?",
-                [date, description, amount, out_account, inout_number, "out"],
-                function (error, in_transaction, fields) {
+                "SELECT * FROM bank_accounts where id=?",
+                [out_account],
+                function (error, out_account_row, fields) {
                   if (error) {
                     console.log(error);
                   } else {
-                    response.ok("Data has been save", res);
+                    connection_hrd.query(
+                      "UPDATE transaction_account SET date=?,description=?,amount=?,account_id=?,bankAccountId=?,opponent_account_id=?,opponent_account_number=?,opponent_account_name=? WHERE transaction_id=? AND type=?",
+                      [
+                        date,
+                        description,
+                        amount,
+                        in_account,
+                        in_account,
+                        out_account,
+                        in_account_row != null
+                          ? in_account_row[0].bank_number
+                          : "0",
+                        in_account_row != null
+                          ? in_account_row[0].account_name
+                          : "",
+                        inout_number,
+                        "in",
+                      ],
+                      function (error, out_transaction, fields) {
+                        if (error) {
+                          console.log(error);
+                        } else {
+                          connection_hrd.query(
+                            "UPDATE transaction_account SET date=?,description=?,amount=?,account_id=?,bankAccountId=?,opponent_account_id=?,opponent_account_number=?,opponent_account_name=? WHERE transaction_id=? AND type=?",
+                            [
+                              date,
+                              description,
+                              amount,
+                              out_account,
+                              out_account,
+                              in_account,
+                              out_account_row != null
+                                ? out_account_row[0].bank_number
+                                : "0",
+                              out_account_row != null
+                                ? out_account_row[0].account_name
+                                : "",
+                              inout_number,
+                              "out",
+                            ],
+                            function (error, in_transaction, fields) {
+                              if (error) {
+                                console.log(error);
+                              } else {
+                                response.ok("Data has been save", res);
+                              }
+                            }
+                          );
+                        }
+                      }
+                    );
                   }
                 }
               );
@@ -3261,7 +3638,9 @@ exports.deleteInOutTransaction = function (req, res) {
                   if (error) {
                     console.log(error);
                   } else {
-                    response.ok("Data has been saved", res);
+                    // response.ok("Data has been saved", res);
+
+                    connection.query("DELETE FROM transactions_tb where");
                   }
                 }
               );
@@ -3543,15 +3922,18 @@ exports.creteTransactionFaktur = function (req, res) {
                         console.log(value.account_beban);
                         if (value.account_beban === "false") {
                           console.log(value.account_beban);
-                          connection_hrd.query(
-                            "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                          connection_finance.query(
+                            "INSERT INTO account_transactions(number,date,amount,note,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?,?)",
                             [
+                              transaction_number,
                               date,
                               value.amount,
                               `${transaction_number}/${value.faktur_number}/${description}`,
                               "in",
                               value.account_id,
-                              transaction_number,
+                              0,
+                              0,
+                              "customer",
                             ],
                             function (error, rows, fields) {
                               if (error) {
@@ -3580,15 +3962,17 @@ exports.creteTransactionFaktur = function (req, res) {
                                             console.log(error);
                                           } else {
                                             // in account piutang
-                                            connection_hrd.query(
-                                              "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                                            connection_finance.query(
+                                              "INSERT INTO account_transactions(number,date,amount,note,type,accountId,table_id,table_name) VALUES (?,?,?,?,?,?,?,?)",
                                               [
+                                                transaction_number,
                                                 date,
                                                 value.amount,
                                                 `${transaction_number}/${value.faktur_number}/${description}`,
                                                 "out",
                                                 "108",
-                                                `${value.faktur_number}_payment_faktur`,
+                                                0,
+                                                "payment_faktur",
                                               ],
                                               function (error, fields) {
                                                 if (error) {
@@ -3618,15 +4002,18 @@ exports.creteTransactionFaktur = function (req, res) {
                         } else {
                           //account beban
                           if (account_id === "0") {
-                            connection_hrd.query(
-                              "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                            connection_finance.query(
+                              "INSERT INTO account_transactions(number,date,amount,note,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?,?)",
                               [
+                                number,
                                 date,
                                 value.amount,
                                 `${transaction_number}/${value.faktur_number}/${description}`,
                                 "in",
                                 "101",
-                                `${value.faktur_number}_payment_faktur`,
+                                0,
+                                0,
+                                "payment_faktur",
                               ],
                               function (error, fields) {
                                 if (error) {
@@ -3640,29 +4027,35 @@ exports.creteTransactionFaktur = function (req, res) {
                             );
                           } else {
                             //account_beban;
-                            connection_hrd.query(
-                              "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                            connection_finance.query(
+                              "INSERT INTO account_transactions(number,date,amount,note,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?,?)",
                               [
+                                number,
                                 date,
                                 value.amount,
                                 `${transaction_number}/${value.faktur_number}/${description}`,
                                 "in",
                                 "101",
-                                `${value.faktur_number}_payment_faktur`,
+                                0,
+                                0,
+                                "payment_faktur",
                               ],
                               function (error, fields) {
                                 if (error) {
                                   console.log(error);
                                 } else {
-                                  connection_hrd.query(
-                                    "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
+                                  connection_finance.query(
+                                    "INSERT INTO account_transactions(number,date,amount,note,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?,?)",
                                     [
+                                      transaction_number,
                                       date,
                                       value.amount,
                                       `${transaction_number}/${value.faktur_number}/${description}`,
                                       "out",
                                       account_id,
-                                      `${value.faktur_number}_payment_faktur_beban`,
+                                      piutangAccount,
+                                      0,
+                                      "payment_faktur",
                                     ],
                                     function (error, fields) {
                                       if (error) {
@@ -3744,7 +4137,8 @@ exports.creteTransactionFakturQO = function (req, res) {
                       if (error) {
                         console.log(error);
                       } else {
-                        if ((value.account_beban = false)) {
+                        console.log("account beban", value.account_beban);
+                        if (value.account_beban === "false") {
                           connection_hrd.query(
                             "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
                             [
@@ -3786,13 +4180,14 @@ exports.creteTransactionFakturQO = function (req, res) {
                             }
                           );
                         } else {
-                          if (value.account_id == "0") {
+                          console.log(account_id);
+                          if (value.account_id === "0") {
                             connection_hrd.query(
                               "INSERT INTO transaction_account(date,amount,description,type,account_id,transaction_id) VALUES (?,?,?,?,?,?)",
                               [
                                 date,
                                 value.amount,
-                                `${transaction_number}/${value.faktur_number}/${description}`,
+                                `${transaction_number} / ${value.faktur_number} / ${description}`,
                                 "in",
                                 "101",
                                 transaction_number,
@@ -3827,7 +4222,7 @@ exports.creteTransactionFakturQO = function (req, res) {
                                     [
                                       date,
                                       value.amount,
-                                      `${transaction_number}/${value.faktur_number}/${description}`,
+                                      `${transaction_number} / ${value.faktur_number} / ${description}`,
                                       "out",
                                       value.account_id,
                                       transaction_number,
@@ -3983,7 +4378,6 @@ exports.getTransactionsfakturDetail = function (req, res) {
             }
           );
         } else {
-          console.log("r");
           response.ok(rows, res);
         }
       }
@@ -3994,6 +4388,7 @@ exports.getTransactionsfakturDetail = function (req, res) {
 exports.detailPaymentInvoice = function (req, res) {
   var data_incvoice = [];
   var faktur_number = req.params.faktur_number;
+  console.log("ww");
   connection.query(
     "SELECT *, customer.name as customer_name FROM faktur  JOIN quotations On quotations.quotation_number=faktur.quotation_number JOIN customer ON quotations.id_customer=customer.id  where faktur_number=?",
     [faktur_number],
@@ -4002,39 +4397,42 @@ exports.detailPaymentInvoice = function (req, res) {
         console.log(error);
       } else {
         connection.query(
-          "SELECT * FROM in_transactions JOIN pic_tb ON in_transactions.pictb_id=pic_tb.id JOIN pic_event ON pic_event.id_event=pic_tb.pic_id where faktur_id=?",
+          "SELECT * FROM in_transactions JOIN pic_tb ON in_transactions.pictb_id=pic_tb.id JOIN pic_event ON pic_event.id_event=pic_tb.pic_id where faktur_id=? ORDER BY date DESC, payment_faktur_item.id ASC",
           [faktur[0].id_faktur],
           function (error, in_transactions) {
             if (error) {
               console.log(error);
             } else {
               connection.query(
-                "SELECT *  FROM   db_magentaeo.payment_faktur_item A JOIN magenta_hrd.bank_accounts B ON  A.account_id = B.id JOIN payment_faktur ON payment_faktur.transaction_number=A.transaction_number where faktur_number=?",
+                "SELECT *  FROM   db_magentaeo.payment_faktur_item A JOIN magenta_hrd.bank_accounts B ON  A.account_id = B.id JOIN payment_faktur ON payment_faktur.transaction_number=A.transaction_number where faktur_number=?  ORDER BY,date DESC, payment_faktur_item.id ASC",
                 [faktur_number],
                 function (error, payment_faktur) {
                   if (error) {
                     console.log(error);
                   } else {
-                    in_transactions.map((value, index) => {
-                      var data = {
-                        amount: value.amount,
-                        date: value.in_date,
-                        description: value.description,
-                        pic_name: value.pic_name,
-                        jabatan: value.jabatan,
-                        email: value.email,
-                        customer: faktur[0].customer_name,
-                        bank_name: null,
-                      };
-                      payment_faktur.push(data);
+                    response.ok(sortedActivities, res);
+                    console.log(in_transactions.length);
+                    // in_transactions.map((value, index) => {
+                    //   var data = {
+                    //     amount: value.amount,
+                    //     date: value.in_date,
+                    //     description: value.description,
+                    //     pic_name: value.pic_name,
+                    //     jabatan: value.jabatan,
+                    //     email: value.email,
+                    //     customer: faktur[0].customer_name,
+                    //     bank_name: null,
+                    //   };
+                    //   payment_faktur.push(data);
+                    //   console.log(index);
 
-                      if (index + 1 >= in_transactions.length) {
-                        const sortedActivities = payment_faktur.sort(
-                          (a, b) => b.date - a.date
-                        );
-                        response.ok(sortedActivities, res);
-                      }
-                    });
+                    //   if (index + 1 >= in_transactions.length) {
+                    //     const sortedActivities = payment_faktur.sort(
+                    //       (a, b) => b.date - a.date
+                    //     );
+                    //     response.ok(sortedActivities, res);
+                    //   }
+                    // });
 
                     // data={
                     //     in_transactions:in_transactions,
@@ -4056,6 +4454,7 @@ exports.detailPaymentInvoice = function (req, res) {
 exports.detailPaymentInvoice = function (req, res) {
   var data_incvoice = [];
   var faktur_number = req.params.faktur_number;
+  console.log("3xw");
 
   connection.query(
     "SELECT * FROM faktur WHERE faktur_number=?",
@@ -4088,26 +4487,32 @@ exports.detailPaymentInvoice = function (req, res) {
                           if (error) {
                             console.log(error);
                           } else {
-                            in_transactions.map((value, index) => {
-                              var data = {
-                                amount: value.amount,
-                                date: value.in_date,
-                                description: value.description,
-                                pic_name: value.pic_name,
-                                jabatan: value.jabatan,
-                                email: value.email,
-                                customer: faktur[0].customer_name,
-                                bank_name: null,
-                              };
-                              payment_faktur.push(data);
+                            console.log(in_transactions.length);
+                            if (in_transactions.length > 0) {
+                              in_transactions.map((value, index) => {
+                                console.log(index);
+                                var data = {
+                                  amount: value.amount,
+                                  date: value.in_date,
+                                  description: value.description,
+                                  pic_name: value.pic_name,
+                                  jabatan: value.jabatan,
+                                  email: value.email,
+                                  customer: faktur[0].customer_name,
+                                  bank_name: null,
+                                };
+                                payment_faktur.push(data);
 
-                              if (index + 1 >= in_transactions.length) {
-                                const sortedActivities = payment_faktur.sort(
-                                  (a, b) => b.date - a.date
-                                );
-                                response.ok(sortedActivities, res);
-                              }
-                            });
+                                if (index + 1 >= in_transactions.length) {
+                                  const sortedActivities = payment_faktur.sort(
+                                    (a, b) => b.date - a.date
+                                  );
+                                  response.ok(sortedActivities, res);
+                                }
+                              });
+                            } else {
+                              response.ok(payment_faktur, res);
+                            }
 
                             // data={
                             //     in_transactions:in_transactions,
@@ -4146,26 +4551,30 @@ exports.detailPaymentInvoice = function (req, res) {
                           if (error) {
                             console.log(error);
                           } else {
-                            in_transactions.map((value, index) => {
-                              var data = {
-                                amount: value.amount,
-                                date: value.in_date,
-                                description: value.description,
-                                pic_name: value.pic_name,
-                                jabatan: value.jabatan,
-                                email: value.email,
-                                customer: faktur[0].customer_name,
-                                bank_name: null,
-                              };
-                              payment_faktur.push(data);
+                            if (in_transactions > 0) {
+                              in_transactions.map((value, index) => {
+                                var data = {
+                                  amount: value.amount,
+                                  date: value.in_date,
+                                  description: value.description,
+                                  pic_name: value.pic_name,
+                                  jabatan: value.jabatan,
+                                  email: value.email,
+                                  customer: faktur[0].customer_name,
+                                  bank_name: null,
+                                };
+                                payment_faktur.push(data);
 
-                              if (index + 1 >= in_transactions.length) {
-                                const sortedActivities = payment_faktur.sort(
-                                  (a, b) => b.date - a.date
-                                );
-                                response.ok(sortedActivities, res);
-                              }
-                            });
+                                if (index + 1 >= in_transactions.length) {
+                                  const sortedActivities = payment_faktur.sort(
+                                    (a, b) => b.date - a.date
+                                  );
+                                  response.ok(sortedActivities, res);
+                                }
+                              });
+                            } else {
+                              response.ok(payment_faktur, res);
+                            }
 
                             // data={
                             //     in_transactions:in_transactions,
@@ -4191,13 +4600,24 @@ exports.detailPaymentInvoice = function (req, res) {
 exports.piutang = function (req, res) {
   const transaction_id = req.body.transaction_id;
   const date = req.body.date;
-  const description = req.body.description;
+  const note = req.body.description;
   const amount = req.body.amount;
   const account_id = req.body.account_id;
+  const description = "Pembayaran invoice";
 
-  connection_hrd.query(
-    "INSERT  INTO transaction_account (date,amount,description,type,transaction_id,account_id) VALUES (?,?,?,?,?,?) ",
-    [date, amount, description, "in", transaction_id, "100"],
+  connection_finance.query(
+    "INSERT  INTO account_transactions (date,amount,description,note,type,accountId,coa_id,table_id,table_name) VALUES (?,?,?,?,?,?,?,?,?) ",
+    [
+      date,
+      amount,
+      description,
+      note,
+      "in",
+      piutangAccount,
+      account_id,
+      transaction_id,
+      "customer",
+    ],
     function (error, rows) {
       if (error) {
         console.log(error);
@@ -4327,6 +4747,34 @@ exports.updateCompany = function (req, res) {
         console.log(error);
       } else {
         response.ok("Data has been save", res);
+      }
+    }
+  );
+};
+
+exports.attendacenEmployess = function (req, res) {
+  connection_hrd.query(
+    "SELECT * FROM attendances where employee_id=15",
+    function (error, rows) {
+      if (error) {
+        console.log(error);
+      } else {
+        console.log(rows, res);
+      }
+    }
+  );
+};
+
+exports.attendancesEmployesss = function (req, res) {
+  connection.query(
+    "SELECT * FROM attendances",
+    function (error, projects, fields) {
+      if (error) {
+        console.log(error);
+      } else {
+        response.ok(rows, res);
+
+        // response.ok(rows,res)
       }
     }
   );

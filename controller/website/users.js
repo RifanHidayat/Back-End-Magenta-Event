@@ -15,6 +15,10 @@ controller.login = async function (req, res) {
     const bcrypt = require("bcryptjs");
     bcrypt.compare(req.body.password, user.password, (err, isMatch) => {
       if (err) {
+        res.status(400).json({
+          code: 400,
+          message: `${err}`,
+        });
         return err;
       }
       if (isMatch) {

@@ -87,4 +87,142 @@ controller.closeProjects = async function (req, res) {
   }
 };
 
+controller.createProject = async function (req, res) {
+  var projectNumber = req.body.project_number;
+  let projectCreatedDate = req.body.project_created_date;
+  var projectStartDate = req.body.project_start_date;
+  var projectEndDate = req.body.project_end_date;
+  var eventCustomer = req.body.event_customer;
+  var eventPic = req.body.event_pic;
+  var description = req.body.description;
+  var latitude = req.body.latitude;
+  var longitude = req.body.longtitude;
+  var grandTotal = req.body.total_project_cost;
+  var QuotationId = req.body.id_quotation;
+  var quotationNumber = req.body.quotation_number;
+  var status = req.body.status;
+  var location = req.body.location;
+  var quotations = req.body.quotations;
+  console.log(quotationNumber);
+  let projects = await model.projects
+    .create({
+      project_number: projectNumber,
+      project_created_date: projectCreatedDate,
+      project_start_date: projectStartDate,
+      project_end_date: projectEndDate,
+      event_customer: eventCustomer,
+      event_pic: eventPic,
+      description: description,
+      latitude: latitude,
+      longitude: longitude,
+      grand_total: grandTotal,
+      id_quotation: QuotationId.toString(),
+      quotation_number: quotationNumber,
+      status: status,
+      location: location,
+    })
+    .then((response) => {
+      console.log(response.id);
+      console.log(quotations);
+      //transaction project
+      model.projectTransactions
+        .create({
+          date: projectCreatedDate,
+          description: description,
+          amount: grandTotal,
+          type: "in",
+          project_id: response.id,
+          connection_id: response.id,
+          connection_table: response.connection_table,
+        })
+        .then((responseTransaction) => {
+          s;
+          res.status(200).json({
+            code: 200,
+            message: "Data has been save",
+          });
+        })
+        .catch((error) => {});
+    })
+    .catch((e) => {
+      res.status(404).json({
+        code: 404,
+        messahe: `${e}`,
+      });
+    });
+  try {
+  } catch {}
+
+  //console.log("tes", projects.id);
+};
+
+controller.createProjectMetaprint = async function (req, res) {
+  var projectNumber = req.body.project_number;
+  let projectCreatedDate = req.body.project_created_date;
+  var projectStartDate = req.body.project_start_date;
+  var projectEndDate = req.body.project_end_date;
+  var eventCustomer = req.body.event_customer;
+  var eventPic = req.body.event_pic;
+  var description = req.body.description;
+  var latitude = req.body.latitude;
+  var longitude = req.body.longtitude;
+  var grandTotal = req.body.total_project_cost;
+  var QuotationId = req.body.id_quotation;
+  var quotationNumber = req.body.quotation_number;
+  var status = req.body.status;
+  var location = req.body.location;
+  var quotations = req.body.quotations;
+  console.log(quotationNumber);
+  let projects = await model.projects
+    .create({
+      project_number: projectNumber,
+      project_created_date: projectCreatedDate,
+      project_start_date: projectStartDate,
+      project_end_date: projectEndDate,
+      event_customer: eventCustomer,
+      event_pic: eventPic,
+      description: description,
+      latitude: latitude,
+      longitude: longitude,
+      grand_total: grandTotal,
+      id_quotation: QuotationId.toString(),
+      quotation_number: quotationNumber,
+      status: status,
+      location: location,
+    })
+    .then((response) => {
+      console.log(response.id);
+      console.log(quotations);
+      //transaction project
+      model.projectTransactions
+        .create({
+          date: projectCreatedDate,
+          description: description,
+          amount: grandTotal,
+          type: "in",
+          project_id: response.id,
+          connection_id: response.id,
+          connection_table: response.connection_table,
+        })
+        .then((responseTransaction) => {
+          s;
+          res.status(200).json({
+            code: 200,
+            message: "Data has been save",
+          });
+        })
+        .catch((error) => {});
+    })
+    .catch((e) => {
+      res.status(404).json({
+        code: 404,
+        messahe: `${e}`,
+      });
+    });
+  try {
+  } catch {}
+
+  //console.log("tes", projects.id);
+};
+
 module.exports = controller;

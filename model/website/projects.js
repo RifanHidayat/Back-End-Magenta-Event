@@ -9,8 +9,9 @@ var projects = db.define(
     quotation_number: Sequelize.DATE,
     project_created_date: Sequelize.DATE,
     project_start_date: Sequelize.DATE,
+    project_end_date: Sequelize.DATE,
     event_customer: Sequelize.STRING,
-    event_customer: Sequelize.STRING,
+    event_pic: Sequelize.STRING,
     description: Sequelize.STRING,
     members: Sequelize.STRING,
     latitude: Sequelize.STRING,
@@ -18,6 +19,7 @@ var projects = db.define(
     grand_total: Sequelize.STRING,
     status: Sequelize.STRING,
     id_quotation: Sequelize.STRING,
+    quotation_number: Sequelize.STRING,
   },
   {
     freezeTableName: true,

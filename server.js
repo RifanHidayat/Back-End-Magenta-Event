@@ -1,13 +1,4 @@
 const express = require("express");
-// require('dotenv/config')
-// const multer=require('multer')
-
-// const storate=multer.memoryStorage({
-//     destination:function(req,file,callback){
-//         callback(null,'')
-//     }
-// })
-//const upload=multer({storage}).single('image')
 
 const bodyParser = require("body-parser");
 //const { json } = require('body-parser');
